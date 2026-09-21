@@ -9,11 +9,18 @@ storage_processed = os.path.join(settings.STORAGE_DIR, "processed")
 os.makedirs(storage_uploads, exist_ok=True)
 os.makedirs(storage_processed, exist_ok=True)
 
-connect_args = {"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+db_url = settings.DATABASE_URL
+# Tự động chuyển đổi postgres:// thành postgresql:// cho tương thích SQLAlchemy
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
+engine_kwargs = {"pool_pre_ping": True} if "postgresql" in db_url else {}
 
 engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args=connect_args
+    db_url,
+    connect_args=connect_args,
+    **engine_kwargs
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
