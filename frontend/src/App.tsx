@@ -112,7 +112,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white w-full max-w-full overflow-x-hidden">
       <Navbar
         activeJob={activeJob}
         currentUser={currentUser}

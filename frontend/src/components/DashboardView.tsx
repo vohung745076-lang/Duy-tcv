@@ -5,7 +5,6 @@ import {
   Users,
   CheckCircle2,
   Clock,
-  TrendingUp,
   Search,
   Filter,
   BarChart3,
@@ -78,7 +77,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   if (loading) {
     return (
-      <div className="p-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-3">
+      <div className="p-12 sm:p-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-3">
         <Sparkles className="w-8 h-8 text-blue-400 animate-spin" />
         <span>Đang tải số liệu Bảng xếp hạng & Phân tích tuyển dụng...</span>
       </div>
@@ -87,31 +86,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   if (showAuditOnly) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
+      <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <History className="w-5 h-5 text-purple-400" /> Nhật ký Kiểm toán Hoạt động (Audit Trail Log)
+              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <History className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" /> Nhật ký Kiểm toán Hoạt động (Audit Trail Log)
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 mt-1">
                 Ghi vết bất biến toàn bộ hành động chấm điểm AI và các can thiệp ghi đè (Override) từ HR để đảm bảo tính minh bạch.
               </p>
             </div>
-            <span className="px-3 py-1 bg-purple-500/10 text-purple-300 border border-purple-500/20 text-xs font-semibold rounded-full">
+            <span className="px-3 py-1 bg-purple-500/10 text-purple-300 border border-purple-500/20 text-xs font-semibold rounded-full self-start sm:self-auto">
               {auditLogs.length} sự kiện kiểm toán
             </span>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-800">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[640px] text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 font-semibold bg-slate-950/80">
-                  <th className="p-3.5">Thời gian</th>
-                  <th className="p-3.5">Tác tử (Actor)</th>
-                  <th className="p-3.5">Hành động</th>
-                  <th className="p-3.5">Điểm cũ → Điểm mới</th>
-                  <th className="p-3.5">Lý do giải trình (Justification)</th>
+                  <th className="p-3">Thời gian</th>
+                  <th className="p-3">Tác tử (Actor)</th>
+                  <th className="p-3">Hành động</th>
+                  <th className="p-3">Điểm cũ → Điểm mới</th>
+                  <th className="p-3">Lý do giải trình (Justification)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
@@ -122,11 +121,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ) : (
                   auditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-slate-800/40 text-slate-300 transition-colors">
-                      <td className="p-3.5 font-mono text-[11px] text-slate-400">
+                      <td className="p-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
                         {new Date(log.created_at).toLocaleString('vi-VN')}
                       </td>
-                      <td className="p-3.5 font-semibold text-cyan-400">{log.user_id || 'HR_RECRUITER'}</td>
-                      <td className="p-3.5">
+                      <td className="p-3 font-semibold text-cyan-400 whitespace-nowrap">{log.user_id || 'HR_RECRUITER'}</td>
+                      <td className="p-3 whitespace-nowrap">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           log.action === 'HR_SCORE_OVERRIDE'
                             ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
@@ -135,10 +134,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {log.action}
                         </span>
                       </td>
-                      <td className="p-3.5 font-mono">
+                      <td className="p-3 font-mono whitespace-nowrap">
                         {log.old_value?.score ?? 'N/A'}% → <strong className="text-purple-400">{log.new_value?.score ?? 'N/A'}%</strong>
                       </td>
-                      <td className="p-3.5 text-slate-200 max-w-sm">{log.justification || 'N/A'}</td>
+                      <td className="p-3 text-slate-200 max-w-sm">{log.justification || 'N/A'}</td>
                     </tr>
                   ))
                 )}
@@ -151,112 +150,110 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* 4 Metric KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-blue-500/60 transition-all duration-300">
+    <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
+      {/* 4 Metric KPI Cards: 2 cards per row on mobile, 4 on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-blue-500/60 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tổng số Hồ sơ</span>
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              <Users className="w-5 h-5" />
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Tổng số CV</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+              <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-white">{totalApplicants}</span>
-            <span className="text-xs text-blue-400 ml-2 font-medium">hồ sơ nộp</span>
+          <div className="mt-2 sm:mt-3">
+            <span className="text-2xl sm:text-3xl font-black text-white">{totalApplicants}</span>
+            <span className="text-[10px] sm:text-xs text-blue-400 ml-1.5 font-medium">hồ sơ</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-emerald-400" /> Tự động bóc tách và che mờ PII
-          </div>
+          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Tự động che mờ PII</div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/60 transition-all duration-300">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/60 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tỷ lệ Đạt chuẩn</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <CheckCircle2 className="w-5 h-5" />
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Đạt chuẩn</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-emerald-400">{passRate}%</span>
-            <span className="text-xs text-slate-400 ml-2 font-medium">({shortlistedCount}/{totalApplicants})</span>
+          <div className="mt-2 sm:mt-3">
+            <span className="text-2xl sm:text-3xl font-black text-emerald-400">{passRate}%</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">({shortlistedCount}/{totalApplicants})</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">Ứng viên có điểm tương thích ≥ 70%</div>
+          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Điểm khớp ≥ 70%</div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-cyan-500/60 transition-all duration-300">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-cyan-500/60 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Thời gian tiết kiệm</span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-              <Clock className="w-5 h-5" />
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Tiết kiệm</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+              <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-cyan-400">~{minutesSaved}</span>
-            <span className="text-xs text-slate-400 ml-2 font-medium">phút làm việc</span>
+          <div className="mt-2 sm:mt-3">
+            <span className="text-2xl sm:text-3xl font-black text-cyan-400">~{minutesSaved}</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">phút</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">Giảm từ 15 phút xuống 10 giây/CV</div>
+          <div className="mt-1.5 text-[10px] text-slate-500 truncate">10 giây / CV</div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Phù hợp Xuất sắc</span>
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-              <Award className="w-5 h-5" />
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Top Tier</span>
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+              <Award className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-purple-400">{highMatchCount}</span>
-            <span className="text-xs text-slate-400 ml-2 font-medium">ứng viên Top Tier</span>
+          <div className="mt-2 sm:mt-3">
+            <span className="text-2xl sm:text-3xl font-black text-purple-400">{highMatchCount}</span>
+            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">ứng viên</span>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">Điểm tương thích ≥ 80%</div>
+          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Điểm khớp ≥ 80%</div>
         </div>
       </div>
 
       {/* Funnel & Visual Analytics Bar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* Recruitment Funnel */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-sm flex items-center gap-2">
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+          <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-400" /> Phễu Tuyển dụng Tự động (Recruitment Funnel)
           </h3>
           <div className="space-y-2.5 pt-1">
             <div>
               <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span>1. Tiếp nhận hồ sơ qua PDF / Google Forms</span>
-                <strong>{totalApplicants} (100%)</strong>
+                <span className="truncate pr-2">1. Tiếp nhận hồ sơ qua PDF / Google Forms</span>
+                <strong className="shrink-0">{totalApplicants} (100%)</strong>
               </div>
-              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-600 rounded-full transition-all duration-700" style={{ width: '100%' }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span>2. AI thẩm định & trích xuất bằng chứng</span>
-                <strong>{totalApplicants} (100%)</strong>
+                <span className="truncate pr-2">2. AI thẩm định & trích xuất bằng chứng</span>
+                <strong className="shrink-0">{totalApplicants} (100%)</strong>
               </div>
-              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-cyan-500 rounded-full transition-all duration-700" style={{ width: '100%' }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span>3. Ứng viên đạt tiêu chuẩn (≥ 70%)</span>
-                <strong>{shortlistedCount} ({passRate}%)</strong>
+                <span className="truncate pr-2">3. Ứng viên đạt tiêu chuẩn (≥ 70%)</span>
+                <strong className="shrink-0">{shortlistedCount} ({passRate}%)</strong>
               </div>
-              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${passRate}%` }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span>4. Ứng viên Top Tier đề xuất phỏng vấn ngay (≥ 80%)</span>
-                <strong>{highMatchCount} ({totalApplicants > 0 ? Math.round((highMatchCount / totalApplicants) * 100) : 0}%)</strong>
+                <span className="truncate pr-2">4. Đề xuất phỏng vấn Top Tier (≥ 80%)</span>
+                <strong className="shrink-0">{highMatchCount} ({totalApplicants > 0 ? Math.round((highMatchCount / totalApplicants) * 100) : 0}%)</strong>
               </div>
-              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
                 <div className="h-full bg-purple-500 rounded-full transition-all duration-700" style={{ width: `${totalApplicants > 0 ? (highMatchCount / totalApplicants) * 100 : 0}%` }} />
               </div>
             </div>
@@ -264,45 +261,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Skills Summary Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-sm flex items-center gap-2">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+          <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400" /> Tiêu chí Trọng tâm JD
           </h3>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400 truncate">
             Vị trí: <strong className="text-cyan-400">{activeJob.title}</strong>
           </p>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
-              <span className="text-slate-400">Kỹ năng bắt buộc:</span>
+              <span className="text-slate-400">Kỹ năng yêu cầu:</span>
               <strong className="text-slate-200">{activeJob.criteria.required_skills.length} skills</strong>
             </div>
             <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
-              <span className="text-slate-400">Kinh nghiệm tối thiểu:</span>
+              <span className="text-slate-400">Kinh nghiệm:</span>
               <strong className="text-slate-200">{activeJob.criteria.min_years_experience}+ năm</strong>
             </div>
             <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
               <span className="text-slate-400">Học vấn:</span>
-              <strong className="text-slate-200 truncate max-w-[120px]">{activeJob.criteria.education_level}</strong>
+              <strong className="text-slate-200 truncate max-w-[110px]">{activeJob.criteria.education_level}</strong>
             </div>
           </div>
         </div>
       </div>
 
       {/* Leaderboard Table Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-400" /> Bảng xếp hạng Ứng viên Tuyển dụng (Leaderboard)
+            <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" /> Bảng xếp hạng Ứng viên (Leaderboard)
             </h2>
-            <p className="text-xs text-slate-400">
-              Sắp xếp tự động theo Điểm quyết định cuối cùng (ưu tiên điểm HR can thiệp)
+            <p className="text-xs text-slate-400 mt-0.5">
+              Sắp xếp tự động theo Điểm quyết định cuối cùng
             </p>
           </div>
 
           {/* Search & Filter Controls */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto text-xs">
-            <div className="relative flex-1 sm:w-64">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto text-xs">
+            <div className="relative flex-1 sm:w-60">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
               <input
                 type="text"
@@ -318,7 +315,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <select
                 value={scoreFilter}
                 onChange={(e) => setScoreFilter(e.target.value as any)}
-                className="bg-transparent text-slate-300 text-xs py-1 px-1 focus:outline-none"
+                className="bg-transparent text-slate-300 text-xs py-1 px-1 focus:outline-none w-full"
               >
                 <option value="all" className="bg-slate-800">Tất cả điểm</option>
                 <option value="high" className="bg-slate-800">Điểm cao (≥ 80%)</option>
@@ -329,20 +326,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Table */}
+        {/* Table with horizontal swipe capability */}
         <div className="overflow-x-auto rounded-2xl border border-slate-800">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full min-w-[660px] text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 font-semibold bg-slate-950/80">
-                <th className="p-3.5 text-center">Hạng</th>
-                <th className="p-3.5">Ứng viên (Bí danh PII)</th>
-                <th className="p-3.5 text-center">Kỹ năng</th>
-                <th className="p-3.5 text-center">Kinh nghiệm</th>
-                <th className="p-3.5 text-center">Học vấn</th>
-                <th className="p-3.5 text-center">Điểm AI</th>
-                <th className="p-3.5 text-center">Điểm Quyết định (Final)</th>
-                <th className="p-3.5 text-center">Trạng thái</th>
-                <th className="p-3.5 text-right">Thao tác</th>
+                <th className="p-3 text-center">Hạng</th>
+                <th className="p-3">Ứng viên (Bí danh)</th>
+                <th className="p-3 text-center">Kỹ năng</th>
+                <th className="p-3 text-center">Kinh nghiệm</th>
+                <th className="p-3 text-center">Học vấn</th>
+                <th className="p-3 text-center">Điểm AI</th>
+                <th className="p-3 text-center">Điểm Quyết định</th>
+                <th className="p-3 text-center">Trạng thái</th>
+                <th className="p-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
@@ -357,7 +354,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ) : (
                 filteredRankings.map((cand) => (
                   <tr key={cand.candidate_id} className="hover:bg-slate-800/40 text-slate-300 transition-colors">
-                    <td className="p-3.5 text-center font-bold text-sm">
+                    <td className="p-3 text-center font-bold text-sm">
                       {cand.rank === 1 ? (
                         <span className="text-amber-400 font-black">🥇 #1</span>
                       ) : cand.rank === 2 ? (
@@ -368,39 +365,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         `#${cand.rank}`
                       )}
                     </td>
-                    <td className="p-3.5 font-bold text-white">
+                    <td className="p-3 font-bold text-white">
                       {cand.masked_name}
-                      <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[150px]">
+                      <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[130px]">
                         {cand.original_filename}
                       </span>
                     </td>
-                    <td className="p-3.5 text-center font-mono">{cand.skills_score}%</td>
-                    <td className="p-3.5 text-center font-mono">{cand.experience_score}%</td>
-                    <td className="p-3.5 text-center font-mono">{cand.education_score}%</td>
-                    <td className="p-3.5 text-center font-mono text-blue-400">{cand.ai_score}%</td>
-                    <td className="p-3.5 text-center font-mono font-bold text-sm">
+                    <td className="p-3 text-center font-mono">{cand.skills_score}%</td>
+                    <td className="p-3 text-center font-mono">{cand.experience_score}%</td>
+                    <td className="p-3 text-center font-mono">{cand.education_score}%</td>
+                    <td className="p-3 text-center font-mono text-blue-400">{cand.ai_score}%</td>
+                    <td className="p-3 text-center font-mono font-bold text-sm">
                       <span className={cand.is_overridden ? 'text-purple-400' : 'text-emerald-400'}>
                         {cand.final_score}%
                       </span>
                       {cand.is_overridden && (
-                        <span className="block text-[9px] text-purple-300 font-sans font-normal">(HR Overridden)</span>
+                        <span className="block text-[9px] text-purple-300 font-sans font-normal">(HR Override)</span>
                       )}
                     </td>
-                    <td className="p-3.5 text-center">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                    <td className="p-3 text-center whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                         cand.status === 'SHORTLISTED' || cand.final_score >= 70
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                           : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                       }`}>
-                        {cand.status === 'SHORTLISTED' || cand.final_score >= 70 ? 'Phù hợp phỏng vấn' : 'Cần xem xét thêm'}
+                        {cand.status === 'SHORTLISTED' || cand.final_score >= 70 ? 'Phù hợp' : 'Xem xét'}
                       </span>
                     </td>
-                    <td className="p-3.5 text-right">
+                    <td className="p-3 text-right whitespace-nowrap">
                       <button
                         onClick={() => onSelectCandidateToWorkspace(cand.candidate_id)}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all"
                       >
-                        Mở Split-View ↗
+                        Mở đối soát ↗
                       </button>
                     </td>
                   </tr>

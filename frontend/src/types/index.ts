@@ -30,6 +30,8 @@ export interface Candidate {
   status: string;
   created_at: string;
   text_preview?: string;
+  masked_text?: string;
+  raw_text?: string;
 }
 
 export interface EvidenceItem {
@@ -49,11 +51,13 @@ export interface EvaluationBreakdown {
   skills: BreakdownCategory;
   experience: BreakdownCategory;
   education: BreakdownCategory;
+  evidence?: EvidenceItem[];
 }
 
 export interface InterviewQuestion {
   question: string;
-  reason_to_ask: string;
+  reason_to_ask?: string;
+  purpose?: string;
 }
 
 export interface Evaluation {
