@@ -1,3 +1,4 @@
+import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,10 +15,10 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs"
 )
 
-# Cấu hình CORS cho Frontend kết nối
+# Cấu hình CORS cho phép Frontend kết nối từ mọi nguồn (Vercel, Localhost, Mobile)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Cho phép tất cả origins trong môi trường dev
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,10 +29,12 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/")
 def root():
     return {
-        "message": "Welcome to AI-Powered CV Screening System API",
+        "message": "AI-Powered CV Screening System API is running successfully!",
         "docs": f"{settings.API_V1_STR}/docs",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "status": "healthy"
     }
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
