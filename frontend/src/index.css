@@ -3,7 +3,18 @@
 @layer base {
   html, body {
     @apply bg-slate-950 text-slate-100 antialiased font-sans min-h-screen overflow-x-hidden w-full max-w-full;
+    font-family: "Be Vietnam Pro", Arial, sans-serif;
   }
+}
+
+/* Keep hierarchy clear without the visually heavy default 700/900 weights. */
+.font-bold,
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-black {
+  font-weight: 700;
 }
 
 /* Ẩn thanh cuộn nhưng vẫn cho phép vuốt chạm trên Mobile */

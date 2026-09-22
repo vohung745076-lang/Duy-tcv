@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Trophy,
   History,
@@ -31,11 +31,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [searchKeyword, setSearchKeyword] = useState('');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
 
-  useEffect(() => {
-    fetchData();
-  }, [activeJob.id, showAuditOnly]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       if (showAuditOnly) {
@@ -50,7 +46,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeJob.id, showAuditOnly]);
+
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   // Metrics KPI calculations
   const totalApplicants = rankings.length;

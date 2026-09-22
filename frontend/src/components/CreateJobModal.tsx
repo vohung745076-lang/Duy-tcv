@@ -65,7 +65,7 @@ export const CreateJobModal: React.FC<CreateJobModalProps> = ({ isOpen, onClose,
       });
       onCreated(createdJob);
       onClose();
-    } catch (err) {
+    } catch {
       alert('Không thể tạo Vị trí tuyển dụng. Vui lòng kiểm tra kết nối Server.');
     } finally {
       setIsSubmitting(false);

@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="font-black text-base sm:text-lg text-white tracking-wide bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent truncate">
-                AI CV Screening
+                Hệ Thống Sàng Lọc CV
               </h1>
               <span className="hidden sm:flex px-2 py-0.5 text-[10px] font-bold bg-blue-500/15 text-cyan-400 border border-blue-500/30 rounded-full items-center gap-1">
                 <UserCheck className="w-3 h-3" /> Human-in-the-loop

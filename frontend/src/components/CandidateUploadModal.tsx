@@ -47,7 +47,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
       onUploaded(result);
       setSelectedFiles([]);
       onClose();
-    } catch (err) {
+    } catch {
       alert('Không thể tải lên file CV. Vui lòng kiểm tra lại định dạng file PDF.');
     } finally {
       setIsUploading(false);
@@ -69,7 +69,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
           onClose();
         }, 1500);
       }, 1200);
-    } catch (err) {
+    } catch {
       alert('Không thể đồng bộ Google Sheet. Vui lòng kiểm tra quyền chia sẻ công khai.');
       setIsUploading(false);
     }

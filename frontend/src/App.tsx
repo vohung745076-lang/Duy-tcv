@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { CreateJobModal } from './components/CreateJobModal';
 import { CandidateUploadModal } from './components/CandidateUploadModal';
@@ -36,36 +36,36 @@ export function App() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [evaluatingCandidateId, setEvaluatingCandidateId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchJobs();
-  }, []);
-
-  useEffect(() => {
-    if (activeJob) {
-      fetchCandidates(activeJob.id);
-    }
-  }, [activeJob?.id]);
-
-  const fetchJobs = async () => {
+  const fetchJobs = useCallback(async () => {
     try {
       const data = await jobApi.list();
       setJobs(data);
-      if (data.length > 0 && !activeJob) {
-        setActiveJob(data[0]);
+      if (data.length > 0) {
+        setActiveJob((currentJob) => currentJob ?? data[0]);
       }
     } catch (err) {
       console.error('Failed to load jobs:', err);
     }
-  };
+  }, []);
 
-  const fetchCandidates = async (jobId: string) => {
+  const fetchCandidates = useCallback(async (jobId: string) => {
     try {
       const data = await candidateApi.listByJob(jobId);
       setCandidates(data);
     } catch (err) {
       console.error('Failed to load candidates:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void fetchJobs();
+  }, [fetchJobs]);
+
+  useEffect(() => {
+    if (activeJob) {
+      void fetchCandidates(activeJob.id);
+    }
+  }, [activeJob, fetchCandidates]);
 
   const handleJobCreated = (newJob: Job) => {
     setJobs([newJob, ...jobs]);
@@ -104,7 +104,7 @@ export function App() {
       if (activeJob) {
         fetchCandidates(activeJob.id);
       }
-    } catch (err) {
+    } catch {
       alert('Không thể hoàn tất phân tích AI.');
     } finally {
       setEvaluatingCandidateId(null);

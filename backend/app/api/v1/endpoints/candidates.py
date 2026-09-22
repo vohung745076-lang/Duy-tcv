@@ -49,7 +49,7 @@ async def upload_candidates(
         masked_text = ""
         try:
             raw_text = pdf_service.extract_text(file_path)
-            masked_text = pii_service.mask_text(raw_text, pseudonym=masked_name)
+            masked_text = pii_service.mask_text(raw_text)
         except Exception as e:
             raw_text = f"[Lỗi trích xuất PDF: {str(e)}]"
             masked_text = raw_text

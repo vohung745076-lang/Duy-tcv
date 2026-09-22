@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FileText,
   CheckCircle,
@@ -42,11 +42,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
 
   const pdfUrl = candidateApi.getPdfUrl(candidate.id);
 
-  useEffect(() => {
-    fetchEvaluation();
-  }, [candidate.id]);
-
-  const fetchEvaluation = async () => {
+  const fetchEvaluation = useCallback(async () => {
     setLoading(true);
     try {
       const data = await evaluationApi.getByCandidate(candidate.id);
@@ -57,7 +53,11 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [candidate.id]);
+
+  useEffect(() => {
+    void fetchEvaluation();
+  }, [fetchEvaluation]);
 
   const handleOpenOverride = () => {
     if (evaluation) {
@@ -77,7 +77,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
       setEvaluation(updated);
       setOverrideModalOpen(false);
       onEvaluationUpdated();
-    } catch (err) {
+    } catch {
       alert('Không thể cập nhật điểm số. Vui lòng nhập đầy đủ lý do bắt buộc.');
     } finally {
       setIsSubmittingOverride(false);

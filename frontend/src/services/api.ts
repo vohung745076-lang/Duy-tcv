@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Job, Candidate, Evaluation, CandidateRanking, AuditLog } from '../types';
+import type { Job, JobCriteria, Candidate, Evaluation, CandidateRanking, AuditLog } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 
@@ -11,7 +11,7 @@ export const apiClient = axios.create({
 });
 
 export const jobApi = {
-  create: async (data: { title: string; department?: string; description?: string; criteria: any }): Promise<Job> => {
+  create: async (data: { title: string; department?: string; description?: string; criteria: JobCriteria }): Promise<Job> => {
     const response = await apiClient.post('/jobs', data);
     return response.data;
   },

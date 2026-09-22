@@ -11,7 +11,7 @@ class PIIService:
         # RegEx cho CMND/CCCD
         self.id_card_pattern = re.compile(r'\b\d{9}\b|\b\d{12}\b')
 
-    def mask_text(self, text: str, pseudonym: str = "Candidate #XX") -> str:
+    def mask_text(self, text: str) -> str:
         """Che mờ các thông tin nhạy cảm trong văn bản CV."""
         if not text:
             return ""
