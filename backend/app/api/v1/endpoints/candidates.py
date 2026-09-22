@@ -2,7 +2,7 @@ import os
 import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -11,8 +11,24 @@ from app.models.candidate import Candidate
 from app.schemas.candidate import CandidateResponseSchema
 from app.services.pdf_service import pdf_service
 from app.services.pii_service import pii_service
+from app.services.storage_service import storage_service
 
 router = APIRouter()
+
+
+def resolve_candidate_file_path(file_path: str) -> str | None:
+    if file_path and os.path.exists(file_path):
+        return file_path
+
+    if file_path and not os.path.isabs(file_path):
+        legacy_path = os.path.normpath(
+            os.path.join(os.path.dirname(settings.STORAGE_DIR), file_path)
+        )
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+    return None
+
 
 @router.post("/jobs/{job_id}/upload", response_model=List[CandidateResponseSchema], status_code=status.HTTP_201_CREATED)
 async def upload_candidates(
@@ -20,7 +36,7 @@ async def upload_candidates(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    """Tải lên nhiều file PDF CV, bóc tách text và che mờ thông tin cá nhân (PII Masking)."""
+    """Tải lên nhiều file PDF CV, bóc tách text, che mờ PII và sao lưu PDF vào candidate_pdfs."""
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")
@@ -39,7 +55,7 @@ async def upload_candidates(
         candidate_number = current_count + idx + 1
         masked_name = f"Candidate #{candidate_number:02d}"
 
-        # Save file PDF
+        # Save file PDF lên đĩa tạm thời
         file_path = os.path.join(job_storage_dir, f"{candidate_number}_{upload_file.filename}")
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(upload_file.file, buffer)
@@ -70,6 +86,8 @@ async def upload_candidates(
     for c in created_candidates:
         db.refresh(c)
         c.text_preview = c.masked_text[:200] if c.masked_text else ""
+        # Lưu bản sao PDF độc lập vào bảng candidate_pdfs
+        storage_service.save_pdf(db, c.id, c.file_path)
 
     return created_candidates
 
@@ -83,13 +101,22 @@ def list_candidates_by_job(job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{candidate_id}/pdf")
 def get_candidate_pdf(candidate_id: str, db: Session = Depends(get_db)):
-    """Stream file PDF CV gốc để hiển thị trên khung PDF Viewer trong Split-View."""
+    """Stream file PDF CV gốc từ đĩa local hoặc phục hồi từ bảng candidate_pdfs."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
-    if not candidate or not os.path.exists(candidate.file_path):
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
+
+    resolved_path = resolve_candidate_file_path(candidate.file_path)
+    pdf_bytes, source = storage_service.get_pdf_bytes(db, candidate_id=candidate.id, local_path=resolved_path)
+
+    if not pdf_bytes:
         raise HTTPException(status_code=404, detail="File PDF không tồn tại.")
 
-    return FileResponse(
-        path=candidate.file_path,
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
-        filename=candidate.original_filename
+        headers={
+            "Content-Disposition": f"inline; filename=\"{candidate.original_filename}\""
+        }
     )
+

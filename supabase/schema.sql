@@ -76,6 +76,18 @@ CREATE INDEX IF NOT EXISTS idx_candidates_job_id ON public.candidates(job_id);
 CREATE INDEX IF NOT EXISTS idx_candidates_status ON public.candidates(status);
 
 -- ==============================================================================================
+-- BẢNG 3B: CANDIDATE_PDFS (Luồng Lưu trữ Tài liệu PDF Độc lập & Bảo mật)
+-- Lưu bản sao PDF mã hóa Base64 kết nối 1-1 với candidates bằng khóa ngoại candidate_id
+-- ==============================================================================================
+CREATE TABLE IF NOT EXISTS public.candidate_pdfs (
+    candidate_id TEXT PRIMARY KEY REFERENCES public.candidates(id) ON DELETE CASCADE,
+    pdf_base64 TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_pdfs_candidate_id ON public.candidate_pdfs(candidate_id);
+
+-- ==============================================================================================
 -- BẢNG 4: EVALUATIONS (Quản lý Kết quả Chấm điểm AI & Phản hồi Nhân sự)
 -- Lưu điểm số chi tiết từng phần, bằng chứng trích dẫn, câu hỏi phỏng vấn và điểm HR ghi đè
 -- ==============================================================================================

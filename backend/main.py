@@ -6,6 +6,13 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.router import api_router
 
+# Import tất cả các model để SQLAlchemy đăng ký đầy đủ các bảng DB
+from app.models.job import JobDescription
+from app.models.candidate import Candidate
+from app.models.evaluation import Evaluation
+from app.models.audit_log import AuditLog
+from app.models.candidate_pdf import CandidatePDF
+
 # Tự động tạo bảng DB nếu chưa có
 Base.metadata.create_all(bind=engine)
 
