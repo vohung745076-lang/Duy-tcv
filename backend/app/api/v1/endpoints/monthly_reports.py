@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.job import JobDescription
+from app.services.email_service import email_service
 
 router = APIRouter()
 
@@ -143,7 +144,18 @@ def send_interview_email(
     candidate.reviewed_by = payload.interviewer_name
     db.commit()
 
-    # Soạn nội dung email tự động
+    # Thực hiện kích hoạt gửi email qua SMTP
+    smtp_success = email_service.send_interview_email(
+        to_email=payload.candidate_email,
+        candidate_name=payload.candidate_name,
+        interview_type=payload.interview_type,
+        interview_time=payload.interview_time,
+        interview_location=payload.interview_location,
+        interviewer_name=payload.interviewer_name,
+        custom_notes=payload.custom_notes
+    )
+
+    # Soạn nội dung email tự động làm bản xem trước
     type_label = "Phỏng vấn Online qua Google Meet / Teams" if payload.interview_type == "ONLINE" else "Phỏng vấn Trực tiếp tại Trụ sở Doanh nghiệp"
     email_content = f"""Kính gửi Anh/Chị {payload.candidate_name},
 
@@ -164,10 +176,13 @@ Trân trọng,
 Bộ phận Nhân sự & Tuyển dụng
 """
 
+    status_msg = f"Đã gửi email mời phỏng vấn tới {payload.candidate_email}!" if smtp_success else f"Đã lưu lịch phỏng vấn. (Chưa gửi SMTP do thiếu cấu hình SMTP_USER/SMTP_PASSWORD trong .env)"
+
     return {
         "success": True,
-        "message": f"Email mời phỏng vấn đã được gửi thành công đến {payload.candidate_email}!",
+        "message": status_msg,
         "sent_to": payload.candidate_email,
+        "sent_via_smtp": smtp_success,
         "interview_time": payload.interview_time,
         "interview_type": payload.interview_type,
         "email_preview": email_content
