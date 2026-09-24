@@ -133,17 +133,33 @@ VI. QUY TRÌNH PHỎNG VẤN & ỨNG TUYỂN (HIRING PROCESS)
 ================================================================================`;
 }
 
+function buildLinksFooter(jdPdfUrl?: string, applyFormUrl?: string): string {
+  const parts: string[] = [];
+  if (jdPdfUrl?.trim()) {
+    parts.push(`📄 Chi tiết bản JD công việc: ${jdPdfUrl.trim()}`);
+  }
+  if (applyFormUrl?.trim()) {
+    parts.push(`👉 Ứng tuyển & Nộp CV trực tiếp tại: ${applyFormUrl.trim()}`);
+  }
+  if (parts.length === 0) return '';
+  return `\n\n--------------------------------------------------\n${parts.join('\n')}\n--------------------------------------------------`;
+}
+
 // 2. SINH TIN ĐĂNG SÁNG TẠO DYNAMIC RANDOM CHO CÁC NỀN TẢNG
 export function generateDynamicCreativePost(
   job: Job,
   platform: 'linkedin' | 'topcv' | 'social',
-  angle: CreativeAngle
+  angle: CreativeAngle,
+  links?: { jdPdfUrl?: string; applyFormUrl?: string }
 ): string {
   const { title, department, description, criteria } = job;
   const skillsList = criteria.required_skills.join(', ');
   const prefSkillsList = criteria.preferred_skills.length > 0 ? criteria.preferred_skills.join(', ') : '';
   const expYears = criteria.min_years_experience;
   const edu = criteria.education_level || 'Đại học chuyên ngành';
+  const footer = buildLinksFooter(links?.jdPdfUrl, links?.applyFormUrl);
+
+  const getPost = (): string => {
 
   switch (angle) {
     case 'tech_challenge': {
@@ -368,4 +384,7 @@ Viết tiếp chương tiếp theo cùng chúng tôi: tuyendung@company.com
 #OurStory #JoinUs #${title.replace(/\s+/g, '')} #MissionDriven`;
     }
   }
+  };
+
+  return `${getPost()}${footer}`;
 }

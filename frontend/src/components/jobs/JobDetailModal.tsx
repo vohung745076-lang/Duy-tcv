@@ -7,6 +7,7 @@ interface JobDetailModalProps {
   onClose: () => void;
   job: Job | null;
   onOpenExportJob: (job: Job) => void;
+  onOpenEnterpriseJD: (job: Job) => void;
 }
 
 export const JobDetailModal: React.FC<JobDetailModalProps> = ({
@@ -14,6 +15,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
   onClose,
   job,
   onOpenExportJob,
+  onOpenEnterpriseJD,
 }) => {
   if (!isOpen || !job) return null;
 
@@ -151,19 +153,30 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
-          <button
-            onClick={() => {
-              onClose();
-              onOpenExportJob(job);
-            }}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
-          >
-            <Share2 className="w-4 h-4" /> Xuất tin JD này
-          </button>
+        <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                onClose();
+                onOpenEnterpriseJD(job);
+              }}
+              className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/20 transition-all"
+            >
+              <FileText className="w-4 h-4" /> 📄 Bản JD Doanh nghiệp (In/Xuất PDF)
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                onOpenExportJob(job);
+              }}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
+            >
+              <Share2 className="w-4 h-4" /> Xuất tin đăng bài
+            </button>
+          </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all"
+            className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all"
           >
             Đóng Cửa Sổ
           </button>
