@@ -95,6 +95,31 @@ def run_auto_migrations():
         except Exception as e:
             print(f"Auto-migration evaluations nullability note: {e}")
 
+        # Tự động trích xuất Tên thật, Email, SĐT cho các ứng viên cũ nếu còn mang tên Candidate #...
+        try:
+            from app.services.pii_service import pii_service
+            candidates_rows = conn.execute(text("SELECT id, masked_name, original_filename, raw_text, email, phone FROM candidates;")).fetchall()
+            for row in candidates_rows:
+                c_id, c_name, c_filename, c_raw_text, c_email, c_phone = row
+                updates = {}
+                if c_raw_text:
+                    info = pii_service.extract_contact_info(c_raw_text, c_filename or "")
+                    if info.get("name") and (not c_name or c_name.startswith("Candidate #")):
+                        updates["masked_name"] = info["name"]
+                    if info.get("email") and not c_email:
+                        updates["email"] = info["email"]
+                    if info.get("phone") and not c_phone:
+                        updates["phone"] = info["phone"]
+
+                if updates:
+                    set_clauses = ", ".join([f"{k} = :{k}" for k in updates.keys()])
+                    updates["id"] = c_id
+                    conn.execute(text(f"UPDATE candidates SET {set_clauses} WHERE id = :id;"), updates)
+            conn.commit()
+            print("Auto-migration: Candidate contact info backfill completed.")
+        except Exception as e:
+            print(f"Auto-migration candidate contact info backfill note: {e}")
+
 try:
     run_auto_migrations()
 except Exception as e:

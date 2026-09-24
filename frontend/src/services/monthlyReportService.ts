@@ -9,6 +9,8 @@ export interface InterviewEmailPayload {
   interview_location: string;
   interviewer_name?: string;
   custom_notes?: string;
+  email_subject?: string;
+  email_body?: string;
 }
 
 export const monthlyReportService = {

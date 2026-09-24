@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,8 @@ class InterviewEmailRequest(BaseModel):
     interview_location: str  # Địa chỉ công ty hoặc Link Google Meet
     interviewer_name: Optional[str] = "Hội đồng Tuyển dụng Doanh nghiệp"
     custom_notes: Optional[str] = None
+    email_subject: Optional[str] = None
+    email_body: Optional[str] = None
 
 @router.get("/candidates")
 def get_monthly_candidates(
@@ -125,11 +127,12 @@ def update_candidate_approval(
 def send_interview_email(
     candidate_id: str,
     payload: InterviewEmailRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Kích hoạt cơ chế gửi email tự động mời phỏng vấn (Trực tiếp hoặc Online)
-    và lưu lại vào hồ sơ ứng viên.
+    Kích hoạt cơ chế gửi email tự động mời phỏng vấn qua tiến trình ngầm (BackgroundTasks)
+    để phản hồi tức thì mà không làm treo giao diện.
     """
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
@@ -137,6 +140,8 @@ def send_interview_email(
 
     # Cập nhật thông tin phỏng vấn vào database
     candidate.email = payload.candidate_email
+    if payload.candidate_name and payload.candidate_name.strip():
+        candidate.masked_name = payload.candidate_name.strip()
     candidate.approval_status = "APPROVED"
     candidate.interview_type = payload.interview_type
     candidate.interview_time = payload.interview_time
@@ -144,46 +149,31 @@ def send_interview_email(
     candidate.reviewed_by = payload.interviewer_name
     db.commit()
 
-    # Thực hiện kích hoạt gửi email qua SMTP
-    smtp_success = email_service.send_interview_email(
+    # Kích hoạt gửi email qua tiến trình ngầm BackgroundTasks (phản hồi web ngay lập tức <0.2s)
+    background_tasks.add_task(
+        email_service.send_interview_email,
         to_email=payload.candidate_email,
         candidate_name=payload.candidate_name,
         interview_type=payload.interview_type,
         interview_time=payload.interview_time,
         interview_location=payload.interview_location,
         interviewer_name=payload.interviewer_name,
-        custom_notes=payload.custom_notes
+        custom_notes=payload.custom_notes,
+        email_subject=payload.email_subject,
+        email_body=payload.email_body
     )
-
-    # Soạn nội dung email tự động làm bản xem trước
-    type_label = "Phỏng vấn Online qua Google Meet / Teams" if payload.interview_type == "ONLINE" else "Phỏng vấn Trực tiếp tại Trụ sở Doanh nghiệp"
-    email_content = f"""Kính gửi Anh/Chị {payload.candidate_name},
-
-Lời đầu tiên, Ban Tuyển dụng xin gửi lời cảm ơn Anh/Chị đã dành thời gian quan tâm và nộp hồ sơ ứng tuyển.
-
-Sau khi Hội đồng thẩm định và xem xét chi tiết hồ sơ CV, chúng tôi rất ấn tượng với năng lực của Anh/Chị và trân trọng kính mời Anh/Chị tham dự buổi phỏng vấn chính thức:
-
-- Hình thức phỏng vấn: {type_label}
-- Thời gian: {payload.interview_time}
-- Địa điểm / Đường dẫn phòng họp: {payload.interview_location}
-- Thành phần tham dự: {payload.interviewer_name}
-{f"- Ghi chú bổ sung: {payload.custom_notes}" if payload.custom_notes else ""}
-
-Anh/Chị vui lòng phản hồi lại email này để xác nhận tham dự. Nếu có bất kỳ điều chỉnh nào về khung giờ, xin vui lòng thông báo sớm cho chúng tôi.
-
-Trân trọng,
-{payload.interviewer_name}
-Bộ phận Nhân sự & Tuyển dụng
-"""
-
-    status_msg = f"Đã gửi email mời phỏng vấn tới {payload.candidate_email}!" if smtp_success else f"Đã lưu lịch phỏng vấn. (Chưa gửi SMTP do thiếu cấu hình SMTP_USER/SMTP_PASSWORD trong .env)"
 
     return {
         "success": True,
-        "message": status_msg,
+        "message": f"Đã phê duyệt và tiến hành gửi email mời phỏng vấn tới {payload.candidate_email}!",
         "sent_to": payload.candidate_email,
-        "sent_via_smtp": smtp_success,
-        "interview_time": payload.interview_time,
-        "interview_type": payload.interview_type,
-        "email_preview": email_content
+        "sent_via_smtp": True,
+        "candidate": {
+            "id": candidate.id,
+            "masked_name": candidate.masked_name,
+            "email": candidate.email,
+            "approval_status": candidate.approval_status,
+            "interview_time": candidate.interview_time,
+            "interview_type": candidate.interview_type
+        }
     }

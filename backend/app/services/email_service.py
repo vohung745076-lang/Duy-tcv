@@ -18,20 +18,47 @@ class EmailService:
         interview_time: str,
         interview_location: str,
         interviewer_name: Optional[str] = "Hội đồng Tuyển dụng Doanh nghiệp",
-        custom_notes: Optional[str] = None
+        custom_notes: Optional[str] = None,
+        email_subject: Optional[str] = None,
+        email_body: Optional[str] = None
     ) -> bool:
         """
         Gửi email HTML gửi thư mời phỏng vấn tới ứng viên.
-        Trả về True nếu gửi thành công qua SMTP, False nếu chưa cấu hình hoặc lỗi.
+        Hỗ trợ nội dung tùy chỉnh trực tiếp từ HR hoặc mẫu doanh nghiệp tự động.
         """
         if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
             logger.warning("SMTP_USER hoặc SMTP_PASSWORD chưa được cấu hình trong .env. Email không thể gửi đi thực tế.")
             return False
 
-        subject = f"[Thư Mời Phỏng Vấn] - Vị trí Ứng tuyển dành cho {candidate_name}"
+        subject = email_subject if email_subject else f"[Thư Mời Phỏng Vấn] - Vị trí Tuyển dụng dành cho {candidate_name}"
         type_label = "Phỏng vấn Online (Google Meet / Teams)" if interview_type == "ONLINE" else "Phỏng vấn Trực tiếp tại Trụ sở Doanh nghiệp"
 
-        # HTML Template đẹp mắt cho Email
+        # Nếu HR đã chỉnh sửa toàn bộ nội dung trong ô soạn thảo, hiển thị định dạng nội dung đó
+        if email_body:
+            body_html = "".join([f"<p style='margin: 8px 0;'>{line}</p>" if line.strip() else "<br/>" for line in email_body.split("\n")])
+            content_section = f"""
+                <div style="font-size: 14px; line-height: 1.7; color: #334155;">
+                    {body_html}
+                </div>
+            """
+        else:
+            content_section = f"""
+                <p>Kính gửi Anh/Chị <strong>{candidate_name}</strong>,</p>
+                <p>Lời đầu tiên, Ban Tuyển dụng xin gửi lời cảm ơn Anh/Chị đã dành thời gian nộp hồ sơ ứng tuyển vào doanh nghiệp của chúng tôi.</p>
+                <p>Sau khi xem xét chi tiết hồ sơ CV, chúng tôi rất ấn tượng với năng lực của Anh/Chị và trân trọng kính mời Anh/Chị tham dự buổi phỏng vấn chính thức:</p>
+                
+                <div class="info-box">
+                    <div class="info-item"><strong>Hình thức:</strong> {type_label}</div>
+                    <div class="info-item"><strong>Thời gian:</strong> {interview_time}</div>
+                    <div class="info-item"><strong>Địa điểm / Link:</strong> <a href="{interview_location}" style="color:#0284c7;">{interview_location}</a></div>
+                    <div class="info-item"><strong>Hội đồng PV:</strong> {interviewer_name}</div>
+                    {f'<div class="info-item"><strong>Ghi chú:</strong> {custom_notes}</div>' if custom_notes else ''}
+                </div>
+
+                <p>Anh/Chị vui lòng phản hồi lại email này để xác nhận tham dự. Nếu có điều chỉnh về thời gian, xin vui lòng thông báo sớm cho chúng tôi.</p>
+                <p>Trân trọng,<br><strong>{interviewer_name}</strong><br>Bộ phận Tuyển dụng Nhân sự</p>
+            """
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -40,38 +67,25 @@ class EmailService:
             <style>
                 body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333333; background-color: #f4f6f9; margin: 0; padding: 20px; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }}
-                .header {{ background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%); color: #ffffff; padding: 30px 25px; text-align: center; }}
-                .header h1 {{ margin: 0; font-size: 22px; font-weight: 700; }}
+                .header {{ background: linear-gradient(135deg, #0284c7 0%, #0d9488 100%); color: #ffffff; padding: 26px 25px; text-align: center; }}
+                .header h1 {{ margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }}
                 .content {{ padding: 30px 25px; }}
                 .info-box {{ background: #f8fafc; border-left: 4px solid #0284c7; padding: 15px 20px; border-radius: 6px; margin: 20px 0; }}
                 .info-item {{ margin-bottom: 10px; font-size: 14px; }}
                 .info-item strong {{ color: #0f172a; width: 140px; display: inline-block; }}
-                .footer {{ background: #f1f5f9; padding: 20px 25px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }}
+                .footer {{ background: #f1f5f9; padding: 18px 25px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>THƯ MỜI PHỎNG VẤN THỰC TẾ</h1>
+                    <h1>THƯ MỜI PHỎNG VẤN ỨNG VIÊN</h1>
                 </div>
                 <div class="content">
-                    <p>Kính gửi Anh/Chị <strong>{candidate_name}</strong>,</p>
-                    <p>Lời đầu tiên, Ban Tuyển dụng xin gửi lời cảm ơn Anh/Chị đã dành thời gian nộp hồ sơ ứng tuyển vào doanh nghiệp của chúng tôi.</p>
-                    <p>Sau khi xem xét chi tiết hồ sơ CV, chúng tôi rất ấn tượng với năng lực của Anh/Chị và trân trọng kính mời Anh/Chị tham dự buổi phỏng vấn chính thức:</p>
-                    
-                    <div class="info-box">
-                        <div class="info-item"><strong>Hình thức:</strong> {type_label}</div>
-                        <div class="info-item"><strong>Thời gian:</strong> {interview_time}</div>
-                        <div class="info-item"><strong>Địa điểm / Link:</strong> <a href="{interview_location}" style="color:#0284c7;">{interview_location}</a></div>
-                        <div class="info-item"><strong>Hội đồng PV:</strong> {interviewer_name}</div>
-                        {f'<div class="info-item"><strong>Ghi chú:</strong> {custom_notes}</div>' if custom_notes else ''}
-                    </div>
-
-                    <p>Anh/Chị vui lòng phản hồi lại email này để xác nhận tham dự. Nếu có điều chỉnh về thời gian, xin vui lòng thông báo sớm cho chúng tôi.</p>
-                    <p>Trân trọng,<br><strong>{interviewer_name}</strong><br>Bộ phận Tuyển dụng Nhân sự</p>
+                    {content_section}
                 </div>
                 <div class="footer">
-                    Email này được gửi tự động từ Hệ thống Quản trị Nhân sự & Sàng lọc CV AI.
+                    Email này được gửi từ Hệ thống Quản trị Tuyển dụng & Sàng lọc CV AI.
                 </div>
             </div>
         </body>
@@ -85,7 +99,8 @@ class EmailService:
         msg.attach(MIMEText(html_content, "html", "utf-8"))
 
         try:
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            # Socket timeout 10 giây ngăn chặn hoàn toàn tình trạng bị treo
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
                 server.starttls()
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 server.sendmail(settings.SMTP_USER, to_email, msg.as_string())

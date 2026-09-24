@@ -75,12 +75,18 @@ async def upload_candidates(
                 raw_text = f"[Lỗi trích xuất PDF: {str(e)}]"
                 masked_text = raw_text
 
+            # Tự động bóc tách Tên thật, Email và Số điện thoại từ CV
+            contact_info = pii_service.extract_contact_info(raw_text, upload_file.filename)
+            extracted_name = contact_info["name"] if contact_info.get("name") else f"Candidate #{candidate_number:02d}"
+
             candidate = Candidate(
                 job_id=effective_job_id,
                 job_title=job.title if job else "Ứng viên tự do / Chung",
                 original_filename=upload_file.filename,
                 file_path=file_path,
-                masked_name=masked_name,
+                masked_name=extracted_name,
+                email=contact_info.get("email"),
+                phone=contact_info.get("phone"),
                 raw_text=raw_text,
                 masked_text=masked_text,
                 status="PARSED"

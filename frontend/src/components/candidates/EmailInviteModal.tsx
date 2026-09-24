@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2 } from 'lucide-react';
+import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService, type InterviewEmailPayload } from '../../services/monthlyReportService';
 
@@ -14,23 +14,76 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const [candidateName, setCandidateName] = useState(candidate.masked_name || 'Ứng viên');
   const [interviewType, setInterviewType] = useState<'ONLINE' | 'OFFLINE'>('ONLINE');
-  const [candidateEmail, setCandidateEmail] = useState(candidate.email || `${candidate.masked_name.toLowerCase().replace(/\s+/g, '')}@gmail.com`);
+  const [candidateEmail, setCandidateEmail] = useState(candidate.email || `${(candidate.masked_name || 'ungvien').toLowerCase().replace(/\s+/g, '')}@gmail.com`);
   const [interviewTime, setInterviewTime] = useState('09:30 AM, Ngày mai');
   const [location, setLocation] = useState('https://meet.google.com/rec-interview-room');
-  const [interviewerName, setInterviewerName] = useState('Bộ phận Tuyển dụng Nhân sự');
+  const [interviewerName, setInterviewerName] = useState('Ban Tuyển dụng & Phát triển Nhân sự');
   const [customNotes, setCustomNotes] = useState('Vui lòng tham gia đúng giờ và chuẩn bị portfolio dự án gần nhất.');
   
+  const [emailSubject, setEmailSubject] = useState(
+    `[THƯ MỜI PHỎNG VẤN] - Vị trí ${candidate.job_title || 'Tuyển Dụng'} - ${candidate.masked_name || 'Ứng viên'}`
+  );
+
+  const generateStandardTemplate = (
+    name: string,
+    type: 'ONLINE' | 'OFFLINE',
+    time: string,
+    loc: string,
+    interviewer: string,
+    notes: string,
+    jobTitle?: string
+  ) => {
+    const typeLabel = type === 'ONLINE' ? 'Online qua Google Meet / Teams' : 'Trực tiếp tại Trụ sở Doanh nghiệp';
+    const posLabel = jobTitle ? `vị trí ${jobTitle}` : 'vị trí ứng tuyển';
+    return `Kính gửi Anh/Chị ${name},
+
+Lời đầu tiên, Ban Tuyển dụng xin gửi lời cảm ơn Anh/Chị đã dành thời gian quan tâm và nộp hồ sơ ứng tuyển vào ${posLabel}.
+
+Sau khi Hội đồng thẩm định và xem xét chi tiết hồ sơ CV năng lực, chúng tôi đánh giá cao kinh nghiệm cũng như tiềm năng của Anh/Chị và trân trọng kính mời Anh/Chị tham dự buổi phỏng vấn chính thức:
+
+• Vị trí ứng tuyển: ${jobTitle || 'Theo hồ sơ ứng tuyển'}
+• Hình thức phỏng vấn: ${typeLabel}
+• Thời gian phỏng vấn: ${time}
+• Địa điểm / Link phòng họp: ${loc}
+• Hội đồng phỏng vấn: ${interviewer}
+${notes ? `• Ghi chú / Chuẩn bị: ${notes}\n` : ''}
+Anh/Chị vui lòng phản hồi (Reply) lại email này để xác nhận tham dự. Nếu có bất kỳ điều chỉnh nào về khung thời gian, xin vui lòng thông báo sớm cho chúng tôi.
+
+Chúc Anh/Chị có một buổi phỏng vấn thành công tốt đẹp!
+
+Trân trọng,
+${interviewer}
+Bộ phận Nhân sự & Tuyển dụng`;
+  };
+
+  const [emailBody, setEmailBody] = useState(
+    generateStandardTemplate(
+      candidate.masked_name || 'Ứng viên',
+      'ONLINE',
+      '09:30 AM, Ngày mai',
+      'https://meet.google.com/rec-interview-room',
+      'Ban Tuyển dụng & Phát triển Nhân sự',
+      'Vui lòng tham gia đúng giờ và chuẩn bị portfolio dự án gần nhất.',
+      candidate.job_title
+    )
+  );
+
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
 
   const handleTypeChange = (type: 'ONLINE' | 'OFFLINE') => {
     setInterviewType(type);
-    if (type === 'ONLINE') {
-      setLocation('https://meet.google.com/rec-interview-room');
-    } else {
-      setLocation('Tầng 8, Tòa nhà Văn phòng Doanh nghiệp, 123 Nguyễn Huệ, Q.1, TP.HCM');
-    }
+    const newLoc = type === 'ONLINE'
+      ? 'https://meet.google.com/rec-interview-room'
+      : 'Tầng 8, Tòa nhà Văn phòng Doanh nghiệp, 123 Nguyễn Huệ, Q.1, TP.HCM';
+    setLocation(newLoc);
+    setEmailBody(generateStandardTemplate(candidateName, type, interviewTime, newLoc, interviewerName, customNotes, candidate.job_title));
+  };
+
+  const handleResetTemplate = () => {
+    setEmailBody(generateStandardTemplate(candidateName, interviewType, interviewTime, location, interviewerName, customNotes, candidate.job_title));
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -39,12 +92,14 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
     try {
       const payload: InterviewEmailPayload = {
         candidate_email: candidateEmail,
-        candidate_name: candidate.masked_name,
+        candidate_name: candidateName,
         interview_type: interviewType,
         interview_time: interviewTime,
         interview_location: location,
         interviewer_name: interviewerName,
         custom_notes: customNotes,
+        email_subject: emailSubject,
+        email_body: emailBody,
       };
 
       await monthlyReportService.sendInterviewEmail(candidate.id, payload);
@@ -52,6 +107,7 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
       setTimeout(() => {
         onSuccess({
           ...candidate,
+          masked_name: candidateName,
           email: candidateEmail,
           approval_status: 'APPROVED',
           interview_type: interviewType,
@@ -59,7 +115,7 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
           interview_location: location,
           reviewed_by: interviewerName,
         });
-      }, 1200);
+      }, 1000);
     } catch (err) {
       console.error('Lỗi gửi mail phỏng vấn:', err);
       alert('Không thể gửi email. Vui lòng kiểm tra lại kết nối!');
@@ -70,19 +126,19 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
               <Mail className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                Phê duyệt & Gửi Email Mời Phỏng vấn
+                Soạn & Gửi Thư Mời Phỏng Vấn
               </h2>
               <p className="text-xs text-slate-400">
-                Gửi thông báo phỏng vấn trực tiếp đến ứng viên <strong className="text-cyan-300">{candidate.masked_name}</strong>
+                Gửi trực tiếp đến ứng viên <strong className="text-cyan-300">{candidateName}</strong> • {candidate.job_title || 'Vị trí chung'}
               </p>
             </div>
           </div>
@@ -101,11 +157,48 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
             </div>
             <h3 className="text-lg font-bold text-white">Đã Gửi Email Thành Công!</h3>
             <p className="text-sm text-slate-300 max-w-md">
-              Hệ thống đã phê duyệt hồ sơ và chuyển thư mời phỏng vấn tự động đến hòm thư <strong className="text-cyan-400">{candidateEmail}</strong>.
+              Hệ thống đã phê duyệt hồ sơ và chuyển thư mời phỏng vấn đến hòm thư <strong className="text-cyan-400">{candidateEmail}</strong>.
             </p>
           </div>
         ) : (
           <form onSubmit={handleSend} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+            {/* Candidate Name & Email */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-cyan-400" />
+                  Tên hiển thị của Ứng viên:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={candidateName}
+                  onChange={(e) => {
+                    const newName = e.target.value;
+                    setCandidateName(newName);
+                    setEmailSubject(`[THƯ MỜI PHỎNG VẤN] - Vị trí ${candidate.job_title || 'Tuyển Dụng'} - ${newName}`);
+                  }}
+                  placeholder="Ví dụ: Nguyễn Văn An"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                  Email nhận thư mời:
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={candidateEmail}
+                  onChange={(e) => setCandidateEmail(e.target.value)}
+                  placeholder="ungvien@example.com"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
             {/* Choose Format: Online or Offline */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-2">Hình thức phỏng vấn:</label>
@@ -138,26 +231,13 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
                   <Building2 className="w-5 h-5 text-purple-400 shrink-0" />
                   <div>
                     <div className="font-bold text-white text-xs">Phỏng vấn Trực tiếp</div>
-                    <div className="text-[10px] text-slate-400">Tại Trụ sở Công ty</div>
+                    <div className="text-[10px] text-slate-400">Tại Trụ sở Doanh nghiệp</div>
                   </div>
                 </button>
               </div>
             </div>
 
-            {/* Candidate Email */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Ứng viên nhận thư:</label>
-              <input
-                type="email"
-                required
-                value={candidateEmail}
-                onChange={(e) => setCandidateEmail(e.target.value)}
-                placeholder="ungvien@example.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            {/* Time & Date */}
+            {/* Time & Location */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
@@ -190,38 +270,80 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
               </div>
             </div>
 
-            {/* Interviewer name */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Người thẩm định / Hội đồng phỏng vấn:</label>
-              <input
-                type="text"
-                value={interviewerName}
-                onChange={(e) => setInterviewerName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
-              />
-            </div>
+            {/* Interviewer Name & Notes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-cyan-400" />
+                  Hội đồng / Người thẩm định:
+                </label>
+                <input
+                  type="text"
+                  value={interviewerName}
+                  onChange={(e) => setInterviewerName(e.target.value)}
+                  placeholder="Ban Tuyển dụng..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
 
-            {/* Custom Notes */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Ghi chú kèm theo cho ứng viên:</label>
-              <textarea
-                rows={2}
-                value={customNotes}
-                onChange={(e) => setCustomNotes(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            {/* Email Preview */}
-            <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl">
-              <span className="text-[11px] font-bold text-slate-400 block mb-1">Xem trước nội dung email tự động:</span>
-              <div className="text-[11px] text-slate-300 font-mono space-y-1 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed whitespace-pre-wrap">
-                {`Kính gửi Anh/Chị ${candidate.masked_name},\n\nBan Tuyển dụng trân trọng kính mời Anh/Chị tham dự buổi phỏng vấn:\n- Hình thức: ${interviewType === 'ONLINE' ? 'Online qua Google Meet / Teams' : 'Trực tiếp tại Trụ sở'}\n- Thời gian: ${interviewTime}\n- Địa điểm/Link: ${location}\n- Thành phần: ${interviewerName}\n\nTrân trọng,\n${interviewerName}`}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                  <MessageSquareText className="w-3.5 h-3.5 text-cyan-400" />
+                  Ghi chú chuẩn bị:
+                </label>
+                <input
+                  type="text"
+                  value={customNotes}
+                  onChange={(e) => setCustomNotes(e.target.value)}
+                  placeholder="Vui lòng mang theo CV bản cứng..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
+                />
               </div>
             </div>
 
+            {/* Email Subject */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                Tiêu đề Thư (Email Subject):
+              </label>
+              <input
+                type="text"
+                required
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500 font-medium"
+              />
+            </div>
+
+            {/* Editable Email Body */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                  Nội dung Thư mời (Bạn có thể gõ sửa trực tiếp):
+                </label>
+                <button
+                  type="button"
+                  onClick={handleResetTemplate}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-all"
+                  title="Điền lại mẫu chuẩn với các thông số bên trên"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Điền lại mẫu chuẩn</span>
+                </button>
+              </div>
+              <textarea
+                rows={11}
+                required
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-slate-200 text-xs font-mono focus:outline-none focus:border-cyan-500 leading-relaxed shadow-inner"
+              />
+            </div>
+
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-2.5 pt-2">
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
               <button
                 type="button"
                 onClick={onClose}
@@ -232,10 +354,10 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
               <button
                 type="submit"
                 disabled={isSending}
-                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 flex items-center gap-1.5 transition-all"
+                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSending ? 'Đang gửi email...' : 'Gửi Email Phỏng vấn & Duyệt'}</span>
+                <span>{isSending ? 'Đang gửi email...' : 'Gửi Thư Mời Phỏng Vấn'}</span>
               </button>
             </div>
           </form>
@@ -244,3 +366,4 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
     </div>
   );
 };
+
