@@ -80,31 +80,19 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 }`}
               >
                 {/* Top Corner Actions */}
-                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 z-10">
-                  {isSelected && (
-                    <span className="hidden xs:inline-block px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-bold rounded-full">
+                {isSelected && (
+                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+                    <span className="inline-block px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-bold rounded-full">
                       Đang chọn
                     </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEnterpriseJdJob(job);
-                    }}
-                    className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gradient-to-r from-indigo-600/30 to-blue-600/30 hover:from-indigo-600/50 hover:to-blue-600/50 text-indigo-200 border border-indigo-500/40 rounded-lg text-[10px] sm:text-[11px] font-semibold flex items-center gap-1 transition-all hover:scale-105 shadow-sm"
-                    title="Xem, Thêm/Sửa và In/Xuất Bản JD Doanh nghiệp chuẩn A4"
-                  >
-                    <FileText className="w-3 h-3 text-indigo-300" />
-                    <span>Bản JD (In/Xuất PDF)</span>
-                  </button>
-                </div>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600/30 to-cyan-500/20 border border-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-base shrink-0">
                     {job.title.charAt(0)}
                   </div>
-                  <div className="truncate pr-36 sm:pr-44">
+                  <div className="truncate pr-16 sm:pr-20">
                     <h3 className="font-bold text-white text-sm truncate">{job.title}</h3>
                     <span className="text-[11px] text-slate-400">{job.department || 'Tuyển dụng'}</span>
                   </div>
