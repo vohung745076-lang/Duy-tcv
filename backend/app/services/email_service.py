@@ -121,7 +121,7 @@ class EmailService:
     <meta name="supported-color-schemes" content="light dark" />
     <title>{subject}</title>
 </head>
-<body style="margin: 0; padding: 20px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+<body style="margin: 0; padding: 20px 10px; background-color: #f1f5f9; font-family: Arial, 'Segoe UI', Roboto, Helvetica, sans-serif; -webkit-font-smoothing: antialiased;">
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed;">
         <tr>
             <td align="center" style="padding: 10px 0;">
