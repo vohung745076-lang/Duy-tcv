@@ -5,7 +5,7 @@ class Evaluation(BaseModel):
     __tablename__ = "evaluations"
 
     candidate_id = Column(String, ForeignKey("candidates.id"), unique=True, nullable=False, index=True)
-    job_id = Column(String, ForeignKey("job_descriptions.id"), nullable=False, index=True)
+    job_id = Column(String, ForeignKey("job_descriptions.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # AI Scores
     overall_score = Column(Float, nullable=False, default=0.0)

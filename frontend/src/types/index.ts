@@ -24,7 +24,7 @@ export interface Job {
 
 export interface Candidate {
   id: string;
-  job_id: string;
+  job_id?: string | null;
   original_filename: string;
   masked_name: string;
   status: string;
@@ -32,6 +32,39 @@ export interface Candidate {
   text_preview?: string;
   masked_text?: string;
   raw_text?: string;
+  email?: string;
+  phone?: string;
+  approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  rejection_reason?: string | null;
+  interview_type?: 'ONLINE' | 'OFFLINE' | string | null;
+  interview_time?: string | null;
+  interview_location?: string | null;
+  reviewed_by?: string | null;
+}
+
+export interface MonthlyCandidate {
+  id: string;
+  job_id?: string | null;
+  job_title?: string;
+  masked_name: string;
+  original_filename: string;
+  status: string;
+  created_at: string;
+  month: number;
+  year: number;
+  email: string;
+  phone: string;
+  approval_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejection_reason?: string | null;
+  interview_type?: 'ONLINE' | 'OFFLINE' | null;
+  interview_time?: string | null;
+  interview_location?: string | null;
+  reviewed_by?: string | null;
+  overall_score: number;
+  skills_score: number;
+  experience_score: number;
+  education_score: number;
+  ai_summary?: string | null;
 }
 
 export interface EvidenceItem {

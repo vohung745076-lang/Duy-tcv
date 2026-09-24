@@ -7,12 +7,13 @@ import { SplitViewWorkspace } from './components/SplitViewWorkspace';
 import { DashboardView } from './components/DashboardView';
 import { AuthModal } from './components/auth/AuthModal';
 import { JobExportModal } from './components/jobs/JobExportModal';
+import { MonthlyCandidatesView } from './components/candidates/MonthlyCandidatesView';
 import { jobApi, candidateApi, evaluationApi } from './services/api';
 import type { Job, Candidate } from './types';
 import type { UserProfile } from './services/supabase';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'jobs' | 'workspace' | 'dashboard' | 'audit'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly'>('jobs');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -81,9 +82,10 @@ export function App() {
       if (activeJob?.id === jobId) {
         setActiveJob(remainingJobs.length > 0 ? remainingJobs[0] : null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete job:', err);
-      alert('Không thể xóa vị trí tuyển dụng này.');
+      const msg = err?.response?.data?.detail || 'Không thể xóa vị trí tuyển dụng này.';
+      alert(msg);
     }
   };
 
@@ -178,6 +180,10 @@ export function App() {
             onSelectCandidateToWorkspace={handleSelectCandidateById}
             showAuditOnly={true}
           />
+        )}
+
+        {activeTab === 'monthly' && (
+          <MonthlyCandidatesView />
         )}
       </main>
 

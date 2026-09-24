@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3 } from 'lucide-react';
+import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3, Calendar } from 'lucide-react';
 import type { Job } from '../types';
 import type { UserProfile } from '../services/supabase';
 
@@ -9,8 +9,8 @@ interface NavbarProps {
   onOpenAuth: () => void;
   onOpenCreateJob: () => void;
   onOpenUpload: () => void;
-  activeTab: 'jobs' | 'workspace' | 'dashboard' | 'audit';
-  setActiveTab: (tab: 'jobs' | 'workspace' | 'dashboard' | 'audit') => void;
+  activeTab: 'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly';
+  setActiveTab: (tab: 'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -153,6 +153,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
             <span>Audit Logs</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('monthly')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'monthly'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Tổng hợp Nhân sự (Theo Tháng)</span>
           </button>
         </div>
       </div>
