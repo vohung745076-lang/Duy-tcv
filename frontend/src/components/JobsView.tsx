@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, Users, ArrowRight, Play, FileText, Clock, Share2, Sparkles, Eye } from 'lucide-react';
+import { Briefcase, Users, ArrowRight, Play, FileText, Clock, Share2, Sparkles, Eye, X } from 'lucide-react';
 import type { Job, Candidate } from '../types';
 import { JobDetailModal } from './jobs/JobDetailModal';
 import { EnterpriseJDModal } from './jobs/EnterpriseJDModal';
@@ -10,6 +10,7 @@ interface JobsViewProps {
   onSelectJob: (job: Job) => void;
   onOpenCreateJob: () => void;
   onOpenExportJob: (job: Job) => void;
+  onDeleteJob?: (jobId: string) => void;
   candidates: Candidate[];
   onSelectCandidateToWorkspace: (candidate: Candidate) => void;
   onRunAiEvaluation: (candidateId: string) => void;
@@ -22,6 +23,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
   onSelectJob,
   onOpenCreateJob,
   onOpenExportJob,
+  onDeleteJob,
   candidates,
   onSelectCandidateToWorkspace,
   onRunAiEvaluation,
@@ -80,19 +82,38 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 }`}
               >
                 {/* Top Corner Actions */}
-                {isSelected && (
-                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 flex items-center gap-1.5">
+                  {isSelected && (
                     <span className="inline-block px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-bold rounded-full">
                       Đang chọn
                     </span>
-                  </div>
-                )}
+                  )}
+                  {onDeleteJob && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (
+                          window.confirm(
+                            `Bạn có chắc chắn muốn xóa vị trí "${job.title}" không?\n\nToàn bộ hồ sơ ứng viên và kết quả chấm điểm của vị trí này cũng sẽ được dọn sạch.`
+                          )
+                        ) {
+                          onDeleteJob(job.id);
+                        }
+                      }}
+                      className="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-500/40 flex items-center justify-center transition-all hover:scale-110 shadow-sm"
+                      title="Xóa bỏ vị trí tuyển dụng này"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600/30 to-cyan-500/20 border border-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-base shrink-0">
                     {job.title.charAt(0)}
                   </div>
-                  <div className="truncate pr-16 sm:pr-20">
+                  <div className="truncate pr-20 sm:pr-24">
                     <h3 className="font-bold text-white text-sm truncate">{job.title}</h3>
                     <span className="text-[11px] text-slate-400">{job.department || 'Tuyển dụng'}</span>
                   </div>

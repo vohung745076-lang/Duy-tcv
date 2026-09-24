@@ -73,6 +73,20 @@ export function App() {
     setActiveTab('jobs');
   };
 
+  const handleDeleteJob = async (jobId: string) => {
+    try {
+      await jobApi.delete(jobId);
+      const remainingJobs = jobs.filter((j) => j.id !== jobId);
+      setJobs(remainingJobs);
+      if (activeJob?.id === jobId) {
+        setActiveJob(remainingJobs.length > 0 ? remainingJobs[0] : null);
+      }
+    } catch (err) {
+      console.error('Failed to delete job:', err);
+      alert('Không thể xóa vị trí tuyển dụng này.');
+    }
+  };
+
   const handleOpenExportJob = (job: Job) => {
     setExportJob(job);
     setExportModalOpen(true);
@@ -131,6 +145,7 @@ export function App() {
             onSelectJob={(job) => setActiveJob(job)}
             onOpenCreateJob={() => setCreateJobOpen(true)}
             onOpenExportJob={handleOpenExportJob}
+            onDeleteJob={handleDeleteJob}
             candidates={candidates}
             onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
             onRunAiEvaluation={handleRunAiEvaluation}

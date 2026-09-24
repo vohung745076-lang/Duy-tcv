@@ -23,6 +23,10 @@ export const jobApi = {
     const response = await apiClient.get(`/jobs/${id}`);
     return response.data;
   },
+  delete: async (id: string): Promise<{ message: string; deleted_id: string }> => {
+    const response = await apiClient.delete(`/jobs/${id}`);
+    return response.data;
+  },
 };
 
 export const candidateApi = {
