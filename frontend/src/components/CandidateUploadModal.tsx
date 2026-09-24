@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, UploadCloud, FileText, ShieldCheck, Link2, Table, CheckCircle2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, UploadCloud, FileText, ShieldCheck, Link2, Table, CheckCircle2, Smartphone } from 'lucide-react';
 import { candidateApi } from '../services/api';
 import type { Candidate, Job } from '../types';
 
@@ -21,21 +21,34 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const pdfFiles = Array.from(e.target.files).filter((file) => file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf');
-      setSelectedFiles(pdfFiles);
+    if (e.target.files && e.target.files.length > 0) {
+      const files = Array.from(e.target.files);
+      const pdfFiles = files.filter(
+        (file) =>
+          file.name.toLowerCase().endsWith('.pdf') ||
+          file.type.includes('pdf') ||
+          file.type === ''
+      );
+      setSelectedFiles(pdfFiles.length > 0 ? pdfFiles : files);
     }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (e.dataTransfer.files) {
-      const pdfFiles = Array.from(e.dataTransfer.files).filter((file) => file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf');
-      setSelectedFiles(pdfFiles);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const pdfFiles = files.filter(
+        (file) =>
+          file.name.toLowerCase().endsWith('.pdf') ||
+          file.type.includes('pdf') ||
+          file.type === ''
+      );
+      setSelectedFiles(pdfFiles.length > 0 ? pdfFiles : files);
     }
   };
 
@@ -131,25 +144,42 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
 
         {activeTab === 'pdf' ? (
           <>
-            {/* Drop Zone */}
+            {/* Drop Zone & File Selector */}
             <div
+              onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
-              className="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-950/60 rounded-2xl p-8 text-center transition-all cursor-pointer group"
+              className="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-950/60 rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer group"
             >
               <input
+                ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf"
+                accept="application/pdf,.pdf"
                 onChange={handleFileChange}
                 id="cv-file-input"
                 className="hidden"
               />
-              <label htmlFor="cv-file-input" className="cursor-pointer flex flex-col items-center">
-                <UploadCloud className="w-12 h-12 text-slate-500 group-hover:text-blue-400 group-hover:scale-110 transition-all mb-2" />
+              <div className="flex flex-col items-center">
+                <UploadCloud className="w-10 h-10 sm:w-12 sm:h-12 text-slate-500 group-hover:text-blue-400 group-hover:scale-110 transition-all mb-2" />
                 <span className="text-sm font-semibold text-slate-200">Kéo thả các file PDF CV vào đây</span>
-                <span className="text-xs text-slate-400 mt-1">hoặc nhấn để chọn file từ máy tính</span>
-              </label>
+                <span className="text-xs text-slate-400 mt-1">hoặc nhấn để duyệt file từ thiết bị</span>
+              </div>
+
+              {/* Dedicated Mobile File Picker Button */}
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-blue-600/25 to-cyan-600/20 hover:from-blue-600/40 hover:to-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                >
+                  <Smartphone className="w-4 h-4 text-cyan-400" />
+                  <span>📱 Chọn file từ iPhone (Tệp) / Android (Quản lý file)</span>
+                </button>
+              </div>
             </div>
 
             {/* Selected File List */}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3, Calendar } from 'lucide-react';
+import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3, Calendar, RefreshCw } from 'lucide-react';
 import type { Job } from '../types';
 import type { UserProfile } from '../services/supabase';
 
@@ -9,6 +9,8 @@ interface NavbarProps {
   onOpenAuth: () => void;
   onOpenCreateJob: () => void;
   onOpenUpload: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
   activeTab: 'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly';
   setActiveTab: (tab: 'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly') => void;
 }
@@ -19,6 +21,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   onOpenCreateJob,
   onOpenUpload,
+  onRefresh,
+  isRefreshing = false,
   activeTab,
   setActiveTab,
 }) => {
@@ -79,6 +83,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
           </button>
+
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="px-2 sm:px-2.5 py-1.5 sm:py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Làm mới & Đồng bộ dữ liệu mới nhất từ server"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Làm mới</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenCreateJob}

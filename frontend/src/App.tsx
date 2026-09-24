@@ -58,6 +58,20 @@ export function App() {
     }
   }, []);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshAll = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchJobs();
+      if (activeJob) {
+        await fetchCandidates(activeJob.id);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     void fetchJobs();
   }, [fetchJobs]);
@@ -135,6 +149,8 @@ export function App() {
         onOpenAuth={() => setAuthModalOpen(true)}
         onOpenCreateJob={() => setCreateJobOpen(true)}
         onOpenUpload={() => setUploadOpen(true)}
+        onRefresh={handleRefreshAll}
+        isRefreshing={isRefreshing}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
