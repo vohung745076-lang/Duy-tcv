@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Briefcase, Award, GraduationCap, Clock, CheckCircle2, Star, Percent, Share2, FileText } from 'lucide-react';
+import { X, Award, GraduationCap, Clock, CheckCircle2, Star, Percent, Share2, FileText } from 'lucide-react';
 import type { Job } from '../../types';
 
 interface JobDetailModalProps {
