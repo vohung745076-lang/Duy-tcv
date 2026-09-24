@@ -22,11 +22,11 @@ class PDFService:
                     if page_text:
                         text_content.append(f"--- Page {page_idx + 1} ---\n{page_text}")
             except Exception as fallback_err:
-                raise ValueError(f"Không thể đọc file PDF: {str(e)} | Fallback error: {str(fallback_err)}")
+                return f"[Hồ sơ PDF dạng đặc biệt - Đã lưu bản sao gốc để HR xem: {str(fallback_err)}]"
 
         full_text = "\n\n".join(text_content).strip()
         if not full_text:
-            raise ValueError("File PDF không chứa văn bản đọc được (có thể là file scan dạng ảnh).")
+            return "[Hồ sơ CV dạng đồ họa / Canva / Scan ảnh - Đã lưu trữ bản sao PDF gốc đầy đủ để Hội đồng HR thẩm định trực tiếp]"
         return full_text
 
 pdf_service = PDFService()
