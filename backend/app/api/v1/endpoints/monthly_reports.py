@@ -123,16 +123,53 @@ def update_candidate_approval(
         "reviewed_by": candidate.reviewed_by
     }
 
+@router.post("/candidates/{candidate_id}/schedule-interview")
+def schedule_interview_only(
+    candidate_id: str,
+    payload: InterviewEmailRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Lưu thông tin lịch hẹn phỏng vấn vào hệ thống và phê duyệt ứng viên
+    (Dành cho trường hợp HR mở gửi trực tiếp qua Gmail 1-Click hoặc ứng dụng Mail).
+    """
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
+
+    candidate.email = payload.candidate_email
+    if payload.candidate_name and payload.candidate_name.strip():
+        candidate.masked_name = payload.candidate_name.strip()
+    candidate.approval_status = "APPROVED"
+    candidate.interview_type = payload.interview_type
+    candidate.interview_time = payload.interview_time
+    candidate.interview_location = payload.interview_location
+    candidate.reviewed_by = payload.interviewer_name
+    db.commit()
+    db.refresh(candidate)
+
+    return {
+        "success": True,
+        "message": "Đã lưu thông tin phỏng vấn và phê duyệt ứng viên thành công!",
+        "candidate": {
+            "id": candidate.id,
+            "masked_name": candidate.masked_name,
+            "email": candidate.email,
+            "approval_status": candidate.approval_status,
+            "interview_time": candidate.interview_time,
+            "interview_type": candidate.interview_type,
+            "interview_location": candidate.interview_location
+        }
+    }
+
 @router.post("/candidates/{candidate_id}/send-interview-email")
 def send_interview_email(
     candidate_id: str,
     payload: InterviewEmailRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Kích hoạt cơ chế gửi email tự động mời phỏng vấn qua tiến trình ngầm (BackgroundTasks)
-    để phản hồi tức thì mà không làm treo giao diện.
+    Lưu thông tin phỏng vấn và kích hoạt gửi email tự động với báo cáo trạng thái chính xác.
     """
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
@@ -148,10 +185,10 @@ def send_interview_email(
     candidate.interview_location = payload.interview_location
     candidate.reviewed_by = payload.interviewer_name
     db.commit()
+    db.refresh(candidate)
 
-    # Kích hoạt gửi email qua tiến trình ngầm BackgroundTasks (phản hồi web ngay lập tức <0.2s)
-    background_tasks.add_task(
-        email_service.send_interview_email,
+    # Gửi email thực tế và kiểm tra kết quả chính xác
+    send_success, status_msg = email_service.send_interview_email(
         to_email=payload.candidate_email,
         candidate_name=payload.candidate_name,
         interview_type=payload.interview_type,
@@ -164,16 +201,16 @@ def send_interview_email(
     )
 
     return {
-        "success": True,
-        "message": f"Đã phê duyệt và tiến hành gửi email mời phỏng vấn tới {payload.candidate_email}!",
+        "success": send_success,
+        "message": status_msg,
         "sent_to": payload.candidate_email,
-        "sent_via_smtp": True,
         "candidate": {
             "id": candidate.id,
             "masked_name": candidate.masked_name,
             "email": candidate.email,
             "approval_status": candidate.approval_status,
             "interview_time": candidate.interview_time,
-            "interview_type": candidate.interview_type
+            "interview_type": candidate.interview_type,
+            "interview_location": candidate.interview_location
         }
     }

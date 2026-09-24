@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "yxcf oujo djgy vydt")
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Ban Tuyển dụng Nhân sự")
 
+    # Cấu hình gửi Email qua HTTPS API / Webhook (vượt qua firewall chặn SMTP của Cloud)
+    EMAIL_WEBHOOK_URL: str = os.getenv("EMAIL_WEBHOOK_URL", "")
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
+
     model_config = SettingsConfigDict(
         env_file=os.path.join(BASE_DIR, ".env"),
         env_file_encoding="utf-8",

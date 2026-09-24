@@ -77,13 +77,14 @@ class EmailService:
         custom_notes: Optional[str] = None,
         email_subject: Optional[str] = None,
         email_body: Optional[str] = None
-    ) -> bool:
+    ) -> tuple[bool, str]:
         """
-        Gửi email HTML gửi thư mời phỏng vấn tới ứng viên với 100% Inline CSS tương thích Dark Mode và Mobile.
+        Gửi email HTML mời phỏng vấn tới ứng viên với cơ chế đa kênh:
+        1. Ưu tiên Google Apps Script Webhook qua HTTPS (Port 443, miễn phí, không bao giờ bị Cloud chặn).
+        2. Brevo REST API qua HTTPS (Port 443).
+        3. Dự phòng SMTP trực tiếp (dành cho local hoặc máy chủ không chặn port 587).
         """
-        if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
-            logger.warning("SMTP_USER hoặc SMTP_PASSWORD chưa được cấu hình. Email không thể gửi đi thực tế.")
-            return False
+        import requests
 
         subject = email_subject if email_subject else f"[Thư Mời Phỏng Vấn] - Vị trí Tuyển dụng dành cho {candidate_name}"
         type_label = "Phỏng vấn Online (Google Meet / Teams)" if interview_type == "ONLINE" else "Phỏng vấn Trực tiếp tại Doanh nghiệp"
@@ -164,23 +165,65 @@ class EmailService:
 </html>
 """
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        # 1. ƯU TIÊN 1: Gửi qua Google Apps Script Webhook HTTPS (Port 443)
+        if settings.EMAIL_WEBHOOK_URL:
+            try:
+                resp = requests.post(
+                    settings.EMAIL_WEBHOOK_URL,
+                    json={
+                        "to": to_email,
+                        "subject": subject,
+                        "body": email_body or "",
+                        "htmlBody": html_content
+                    },
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    logger.info(f"Đã gửi email qua Google Webhook tới {to_email}")
+                    return True, f"Đã gửi email mời phỏng vấn thành công tới {to_email} qua Google Webhook!"
+            except Exception as e:
+                logger.error(f"Lỗi gửi qua Google Webhook: {str(e)}")
 
-        try:
-            # Socket timeout 10 giây ngăn chặn hoàn toàn tình trạng bị treo
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
-                server.starttls()
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
-            logger.info(f"Đã gửi email phỏng vấn thật tới {to_email} thành công qua SMTP.")
-            return True
-        except Exception as e:
-            logger.error(f"Lỗi khi kết nối SMTP để gửi email tới {to_email}: {str(e)}")
-            return False
+        # 2. ƯU TIÊN 2: Gửi qua Brevo API HTTPS (Port 443)
+        if settings.BREVO_API_KEY:
+            try:
+                headers = {
+                    "accept": "application/json",
+                    "api-key": settings.BREVO_API_KEY,
+                    "content-type": "application/json"
+                }
+                data = {
+                    "sender": {"name": settings.SMTP_FROM_NAME, "email": settings.SMTP_USER},
+                    "to": [{"email": to_email, "name": candidate_name}],
+                    "subject": subject,
+                    "htmlContent": html_content
+                }
+                resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=data, timeout=10)
+                if resp.status_code in [200, 201, 202]:
+                    logger.info(f"Đã gửi email qua Brevo API tới {to_email}")
+                    return True, f"Đã gửi email thành công qua Brevo API tới {to_email}!"
+            except Exception as e:
+                logger.error(f"Lỗi gửi qua Brevo API: {str(e)}")
+
+        # 3. DỰ PHÒNG: Thử gửi trực tiếp qua SMTP với timeout ngắn 3s (nếu môi trường không bị chặn port 587)
+        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+            try:
+                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=3) as server:
+                    server.starttls()
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
+                logger.info(f"Đã gửi email phỏng vấn thật tới {to_email} qua SMTP.")
+                return True, f"Đã gửi email mời phỏng vấn tới {to_email} thành công!"
+            except Exception as e:
+                logger.warning(f"SMTP trực tiếp không kết nối được (do Cloud chặn cổng 587/465): {str(e)}")
+
+        return False, "Máy chủ đám mây (Render Free) chặn cổng SMTP (587/465). Bạn vui lòng dùng nút 'Mở Gmail gửi ngay (1-Click)' trên giao diện để gửi trực tiếp từ Gmail!"
 
 email_service = EmailService()
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText } from 'lucide-react';
+import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText, ExternalLink, AlertTriangle } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService, type InterviewEmailPayload } from '../../services/monthlyReportService';
 
@@ -72,6 +72,8 @@ Bộ phận Nhân sự & Tuyển dụng`;
 
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleTypeChange = (type: 'ONLINE' | 'OFFLINE') => {
     setInterviewType(type);
@@ -86,9 +88,10 @@ Bộ phận Nhân sự & Tuyển dụng`;
     setEmailBody(generateStandardTemplate(candidateName, interviewType, interviewTime, location, interviewerName, customNotes, candidate.job_title));
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Mở tab Gmail gửi trực tiếp với 1-Click (100% không bao giờ lỗi do port cloud)
+  const handleOpenGmailDirect = async () => {
     setIsSending(true);
+    setErrorMessage(null);
     try {
       const payload: InterviewEmailPayload = {
         candidate_email: candidateEmail,
@@ -102,8 +105,15 @@ Bộ phận Nhân sự & Tuyển dụng`;
         email_body: emailBody,
       };
 
-      await monthlyReportService.sendInterviewEmail(candidate.id, payload);
+      // Lưu thông tin vào database hệ thống
+      await monthlyReportService.scheduleInterviewOnly(candidate.id, payload);
+
+      // Mở Gmail compose tab điền sẵn toàn bộ trường
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(candidateEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+      window.open(gmailUrl, '_blank');
+
       setSentSuccess(true);
+      setStatusMessage(`Đã phê duyệt ứng viên và mở thư mục soạn thảo Gmail gửi tới ${candidateEmail}!`);
       setTimeout(() => {
         onSuccess({
           ...candidate,
@@ -115,10 +125,55 @@ Bộ phận Nhân sự & Tuyển dụng`;
           interview_location: location,
           reviewed_by: interviewerName,
         });
-      }, 1000);
+      }, 1200);
     } catch (err) {
+      console.error('Lỗi lưu phỏng vấn:', err);
+      setErrorMessage('Không thể lưu thông tin vào hệ thống. Vui lòng kiểm tra lại kết nối!');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Gửi tự động qua Hệ thống API Backend
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSending(true);
+    setErrorMessage(null);
+    try {
+      const payload: InterviewEmailPayload = {
+        candidate_email: candidateEmail,
+        candidate_name: candidateName,
+        interview_type: interviewType,
+        interview_time: interviewTime,
+        interview_location: location,
+        interviewer_name: interviewerName,
+        custom_notes: customNotes,
+        email_subject: emailSubject,
+        email_body: emailBody,
+      };
+
+      const result = await monthlyReportService.sendInterviewEmail(candidate.id, payload);
+      if (result.success) {
+        setSentSuccess(true);
+        setStatusMessage(result.message || `Đã gửi thư mời phỏng vấn thành công tới ${candidateEmail}!`);
+        setTimeout(() => {
+          onSuccess({
+            ...candidate,
+            masked_name: candidateName,
+            email: candidateEmail,
+            approval_status: 'APPROVED',
+            interview_type: interviewType,
+            interview_time: interviewTime,
+            interview_location: location,
+            reviewed_by: interviewerName,
+          });
+        }, 1200);
+      } else {
+        setErrorMessage(result.message);
+      }
+    } catch (err: any) {
       console.error('Lỗi gửi mail phỏng vấn:', err);
-      alert('Không thể gửi email. Vui lòng kiểm tra lại kết nối!');
+      setErrorMessage('Không thể gửi tự động qua Cloud. Bạn có thể sử dụng nút "Mở Gmail gửi ngay (1-Click)" bên dưới!');
     } finally {
       setIsSending(false);
     }
@@ -155,13 +210,35 @@ Bộ phận Nhân sự & Tuyển dụng`;
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 animate-bounce">
               <CheckCircle2 className="w-9 h-9" />
             </div>
-            <h3 className="text-lg font-bold text-white">Đã Gửi Email Thành Công!</h3>
+            <h3 className="text-lg font-bold text-white">Xử Lý Hoàn Tất!</h3>
             <p className="text-sm text-slate-300 max-w-md">
-              Hệ thống đã phê duyệt hồ sơ và chuyển thư mời phỏng vấn đến hòm thư <strong className="text-cyan-400">{candidateEmail}</strong>.
+              {statusMessage || `Hệ thống đã phê duyệt hồ sơ và chuyển thư mời phỏng vấn đến hòm thư ${candidateEmail}.`}
             </p>
           </div>
         ) : (
           <form onSubmit={handleSend} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+            {/* Warning / Error notice banner with 1-Click fallback */}
+            {errorMessage && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-white">Lưu ý gửi thư: </span>
+                    <span>{errorMessage}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenGmailDirect}
+                  disabled={isSending}
+                  className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shrink-0 shadow-sm"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở Gmail gửi ngay</span>
+                </button>
+              </div>
+            )}
+
             {/* Candidate Name & Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -343,22 +420,40 @@ Bộ phận Nhân sự & Tuyển dụng`;
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={isSending}
-                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 flex items-center gap-1.5 transition-all disabled:opacity-50"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isSending ? 'Đang gửi email...' : 'Gửi Thư Mời Phỏng Vấn'}</span>
-              </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-800/80">
+              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Khuyên dùng: Chọn <strong>Mở Gmail gửi ngay</strong> để gửi trực tiếp 100% chuẩn xác.</span>
+              </div>
+              
+              <div className="flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenGmailDirect}
+                  disabled={isSending}
+                  className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  title="Mở trực tiếp Gmail với đầy đủ thông tin đã soạn để gửi ngay lập tức"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở Gmail gửi ngay (1-Click)</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSending}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  title="Gửi tự động qua API máy chủ"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSending ? 'Đang gửi...' : 'Gửi tự động (API)'}</span>
+                </button>
+              </div>
             </div>
           </form>
         )}

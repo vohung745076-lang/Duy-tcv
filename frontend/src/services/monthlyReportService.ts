@@ -39,8 +39,16 @@ export const monthlyReportService = {
   sendInterviewEmail: async (
     candidateId: string,
     payload: InterviewEmailPayload
-  ): Promise<{ success: boolean; message: string; email_preview: string }> => {
+  ): Promise<{ success: boolean; message: string; candidate?: any }> => {
     const response = await apiClient.post(`/monthly/candidates/${candidateId}/send-interview-email`, payload);
+    return response.data;
+  },
+
+  scheduleInterviewOnly: async (
+    candidateId: string,
+    payload: InterviewEmailPayload
+  ): Promise<{ success: boolean; message: string; candidate?: any }> => {
+    const response = await apiClient.post(`/monthly/candidates/${candidateId}/schedule-interview`, payload);
     return response.data;
   },
 };
