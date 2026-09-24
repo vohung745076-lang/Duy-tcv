@@ -32,8 +32,14 @@ def run_auto_migrations():
     with engine.connect() as conn:
         for table, col, col_type in columns_to_add:
             try:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type};"))
-                conn.commit()
+                # Kiểm tra xem cột đã tồn tại chưa bằng PRAGMA table_info (đặc thù của SQLite)
+                result = conn.execute(text(f"PRAGMA table_info({table});"))
+                existing_columns = [row[1] for row in result.fetchall()]
+                
+                if col not in existing_columns:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type};"))
+                    conn.commit()
+                    print(f"Auto-migration: Added column {col} to {table}")
             except Exception as e:
                 print(f"Auto-migration note for {table}.{col}: {e}")
 

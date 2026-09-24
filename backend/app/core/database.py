@@ -10,6 +10,12 @@ os.makedirs(storage_uploads, exist_ok=True)
 os.makedirs(storage_processed, exist_ok=True)
 
 db_url = settings.DATABASE_URL
+# Tự động chuyển đổi đường dẫn tương đối SQLite thành đường dẫn tuyệt đối chuẩn xác
+if db_url.startswith("sqlite:///./") or db_url == "sqlite:///cv_screening.db":
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    abs_db_path = os.path.join(base_dir, "cv_screening.db").replace("\\", "/")
+    db_url = f"sqlite:///{abs_db_path}"
+
 # Tự động chuyển đổi postgres:// thành postgresql:// cho tương thích SQLAlchemy
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
