@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, Users, ArrowRight, Play, FileText, Clock, Share2, Sparkles, Plus, Eye } from 'lucide-react';
+import { Briefcase, Users, ArrowRight, Play, FileText, Clock, Share2, Sparkles, Eye } from 'lucide-react';
 import type { Job, Candidate } from '../types';
 import { JobDetailModal } from './jobs/JobDetailModal';
 import { EnterpriseJDModal } from './jobs/EnterpriseJDModal';
@@ -50,11 +50,11 @@ export const JobsView: React.FC<JobsViewProps> = ({
         </div>
         <div className="flex items-center gap-3 relative z-10 shrink-0 w-full sm:w-auto">
           <button
-            onClick={onOpenCreateJob}
-            className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
+            onClick={() => setEnterpriseJdJob(activeJob || jobs[0] || null)}
+            className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
           >
-            <Plus className="w-4 h-4" />
-            <span>Tạo Vị trí Tuyển dụng Mới</span>
+            <FileText className="w-4 h-4" />
+            <span>Bản JD Doanh nghiệp (In / Xuất PDF)</span>
           </button>
         </div>
       </div>
@@ -280,6 +280,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
         isOpen={!!enterpriseJdJob}
         onClose={() => setEnterpriseJdJob(null)}
         job={enterpriseJdJob}
+        onOpenCreateJob={onOpenCreateJob}
       />
     </div>
   );

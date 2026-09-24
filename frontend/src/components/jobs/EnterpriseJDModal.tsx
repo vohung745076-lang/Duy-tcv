@@ -10,6 +10,8 @@ import {
   RotateCcw,
   FileText,
   ShieldAlert,
+  Plus,
+  Ban,
 } from 'lucide-react';
 import type { Job } from '../../types';
 import { generateEnterpriseJD } from '../../services/jdGeneratorService';
@@ -18,26 +20,55 @@ interface EnterpriseJDModalProps {
   isOpen: boolean;
   onClose: () => void;
   job: Job | null;
+  onOpenCreateJob?: () => void;
 }
 
 export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
   isOpen,
   onClose,
   job,
+  onOpenCreateJob,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [jdContent, setJdContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
   const [copied, setCopied] = useState(false);
+  const [saveNotification, setSaveNotification] = useState(false);
 
   useEffect(() => {
     if (job) {
-      // Khởi tạo nội dung JD chuẩn cho công việc
-      setJdContent(generateEnterpriseJD(job));
+      const generated = generateEnterpriseJD(job);
+      setJdContent(generated);
+      setOriginalContent(generated);
       setIsEditing(false);
     }
   }, [job]);
 
   if (!isOpen || !job) return null;
+
+  const handleStartEdit = () => {
+    setOriginalContent(jdContent);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    setIsEditing(false);
+    setSaveNotification(true);
+    setTimeout(() => setSaveNotification(false), 2500);
+  };
+
+  const handleCancelEdit = () => {
+    setJdContent(originalContent);
+    setIsEditing(false);
+  };
+
+  const handleResetOriginal = () => {
+    if (confirm('Khôi phục lại toàn bộ nội dung văn bản JD theo tiêu chuẩn gốc?')) {
+      const original = generateEnterpriseJD(job);
+      setJdContent(original);
+      setOriginalContent(original);
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(jdContent);
@@ -50,7 +81,7 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Bản_JD_Chính_Thức_${job.title.replace(/\s+/g, '_')}.txt`;
+    a.download = `Ban_JD_${job.title.replace(/\s+/g, '_')}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -70,10 +101,10 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
           <style>
             @page {
               size: A4;
-              margin: 20mm;
+              margin: 18mm;
             }
             body {
-              font-family: 'Times New Roman', Times, serif, 'Segoe UI', Tahoma;
+              font-family: 'Times New Roman', Times, serif;
               font-size: 13pt;
               line-height: 1.6;
               color: #111827;
@@ -84,20 +115,21 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
               white-space: pre-wrap;
               word-wrap: break-word;
               font-family: inherit;
-              font-size: 11pt;
-              line-height: 1.5;
+              font-size: 12pt;
+              line-height: 1.6;
             }
             .header {
               text-align: center;
-              border-bottom: 2px solid #2563eb;
+              border-bottom: 2px solid #1e3a8a;
               padding-bottom: 12px;
-              margin-bottom: 20px;
+              margin-bottom: 24px;
             }
             .title {
               font-size: 18pt;
               font-weight: bold;
               color: #1e3a8a;
               margin: 0 0 6px 0;
+              text-transform: uppercase;
             }
             .subtitle {
               font-size: 11pt;
@@ -116,12 +148,12 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
         </head>
         <body>
           <div class="header">
-            <h1 class="title">BẢN MÔ TẢ CÔNG VIỆC & TIÊU CHUẨN NĂNG LỰC</h1>
-            <p class="subtitle">Dành cho vị trí: ${job.title.toUpperCase()} | Phòng ban: ${job.department || 'Công nghệ'}</p>
+            <h1 class="title">BẢN MÔ TẢ CÔNG VIỆC VÀ TIÊU CHUẨN NĂNG LỰC</h1>
+            <p class="subtitle">Vị trí: ${job.title.toUpperCase()} | Phòng ban: ${job.department || 'Khối Kỹ thuật'}</p>
           </div>
           <pre>${jdContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
           <div class="footer">
-            Tài liệu lưu hành nội bộ & Cổng tuyển dụng chính thức - Ngày in: ${new Date().toLocaleDateString('vi-VN')}
+            Tài liệu lưu hành nội bộ & Cổng tuyển dụng chính thức - Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}
           </div>
           <script>
             window.onload = function() {
@@ -135,12 +167,6 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
       </html>
     `);
     printWindow.document.close();
-  };
-
-  const handleReset = () => {
-    if (confirm('Khôi phục lại nội dung bản JD chuẩn gốc của hệ thống?')) {
-      setJdContent(generateEnterpriseJD(job));
-    }
   };
 
   return (
@@ -162,7 +188,7 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-400">
-                Vị trí: <span className="text-blue-300 font-semibold">{job.title}</span> | Quản lý độc lập (Không ảnh hưởng đến lưu trữ CV)
+                Vị trí: <span className="text-blue-300 font-semibold">{job.title}</span> ({job.department || 'Tuyển dụng'})
               </p>
             </div>
           </div>
@@ -174,42 +200,74 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
           </button>
         </div>
 
-        {/* Action Toolbar */}
+        {/* Action Toolbar with All Required Buttons */}
         <div className="p-3 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2.5 shrink-0 text-xs">
-          <div className="flex items-center gap-2">
+          {/* Main Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
             {!isEditing ? (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl font-semibold flex items-center gap-1.5 transition-all"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Chỉnh sửa / Thêm bớt nội dung
-              </button>
+              <>
+                {/* 1. NÚT THÊM JD MỚI */}
+                {onOpenCreateJob && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenCreateJob();
+                    }}
+                    className="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all hover:scale-105"
+                  >
+                    <Plus className="w-4 h-4" /> <span>Thêm JD Mới</span>
+                  </button>
+                )}
+
+                {/* 2. NÚT CHỈNH SỬA */}
+                <button
+                  onClick={handleStartEdit}
+                  className="px-3.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 rounded-xl font-semibold flex items-center gap-1.5 transition-all hover:scale-105"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> <span>Chỉnh Sửa</span>
+                </button>
+              </>
             ) : (
-              <div className="flex items-center gap-2">
+              <>
+                {/* 3. NÚT LƯU CHỈNH SỬA */}
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
+                  onClick={handleSaveEdit}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/25 transition-all hover:scale-105"
                 >
-                  <Save className="w-3.5 h-3.5" /> Lưu bản sửa
+                  <Save className="w-4 h-4" /> <span>Lưu Chỉnh Sửa</span>
                 </button>
+
+                {/* 4. NÚT HỦY BỎ (KHÔNG CHỈNH SỬA) */}
                 <button
-                  onClick={handleReset}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium border border-slate-700 flex items-center gap-1.5 transition-all"
-                  title="Khôi phục lại JD gốc ban đầu"
+                  onClick={handleCancelEdit}
+                  className="px-3.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-xl font-semibold flex items-center gap-1.5 transition-all"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Khôi phục gốc
+                  <Ban className="w-3.5 h-3.5" /> <span>Hủy Chỉnh Sửa</span>
                 </button>
-              </div>
+
+                {/* KHÔI PHỤC GỐC */}
+                <button
+                  onClick={handleResetOriginal}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-xl font-medium border border-slate-700 flex items-center gap-1 transition-all"
+                  title="Khôi phục lại nội dung ban đầu"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> <span>Khôi phục gốc</span>
+                </button>
+              </>
             )}
-            <span className="text-[11px] text-slate-400 hidden md:inline">
-              {isEditing ? 'Đang ở chế độ chỉnh sửa trực tiếp' : 'Chế độ xem trước văn bản chuẩn'}
-            </span>
+
+            {saveNotification && (
+              <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 animate-pulse">
+                <Check className="w-3.5 h-3.5" /> Đã lưu chỉnh sửa thành công!
+              </span>
+            )}
           </div>
 
+          {/* Export & Utility Buttons */}
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrintPDF}
-              className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 transition-all"
+              className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/20 transition-all hover:scale-105"
               title="Mở hộp thoại in và lưu file PDF chuẩn A4"
             >
               <Printer className="w-4 h-4" /> In / Xuất PDF (A4)
@@ -230,14 +288,14 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
           </div>
         </div>
 
-        {/* Content Section */}
+        {/* Content Body */}
         <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           {isEditing ? (
             <div className="space-y-2 h-full flex flex-col">
               <div className="flex items-center justify-between text-[11px] text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
                 <span className="flex items-center gap-1.5">
                   <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  Bạn có thể trực tiếp thêm bớt, sửa đổi tiêu chí, quyền lợi, mô tả công việc của công ty bên dưới.
+                  Bạn có thể trực tiếp thêm bớt, sửa đổi tiêu chí, mô tả công việc bên dưới. Bấm "Lưu Chỉnh Sửa" khi hoàn tất hoặc "Hủy Chỉnh Sửa" để quay lại.
                 </span>
                 <span className="font-mono">{jdContent.length} ký tự</span>
               </div>
@@ -257,15 +315,15 @@ export const EnterpriseJDModal: React.FC<EnterpriseJDModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0 text-xs">
+        <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0 text-xs">
           <span className="text-slate-400 text-[11px]">
-            Văn bản tiêu chuẩn gồm 6 phần đầy đủ: Tổng quan, Sứ mệnh, Trách nhiệm, Yêu cầu, Đãi ngộ, Quy trình.
+            Bố cục văn bản tự nhiên gồm 6 phần đầy đủ: Tổng quan, Sứ mệnh, Trách nhiệm, Yêu cầu, Đãi ngộ, Quy trình.
           </span>
           <button
             onClick={onClose}
             className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all"
           >
-            Đóng
+            Đóng Cửa Sổ
           </button>
         </div>
       </div>

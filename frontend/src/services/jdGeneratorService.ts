@@ -56,81 +56,70 @@ export function generateEnterpriseJD(job: Job): string {
   const edu = criteria.education_level || 'Đại học chuyên ngành liên quan';
   const weights = criteria.weights || { skills: 0.5, experience: 0.3, education: 0.2 };
 
-  return `================================================================================
-                    BẢN MÔ TẢ CÔNG VIỆC VÀ TIÊU CHUẨN CHỨC DANH
-                         (JOB DESCRIPTION & SPECIFICATION)
-================================================================================
+  return `BẢN MÔ TẢ CÔNG VIỆC VÀ TIÊU CHUẨN NĂNG LỰC
+(JOB DESCRIPTION & SPECIFICATION)
+
+Vị trí: ${title.toUpperCase()}
+Phòng ban / Khối: ${department || 'Khối Công nghệ & Kỹ thuật'}
+Mã tham chiếu: JD-${job.id.substring(0, 8).toUpperCase()}
+Ngày lập tiêu chuẩn: ${new Date(created_at).toLocaleDateString('vi-VN')}
 
 I. TỔNG QUAN VỊ TRÍ TUYỂN DỤNG
---------------------------------------------------------------------------------
-- Vị trí chức danh: ${title.toUpperCase()}
-- Phòng ban / Khối: ${department || 'Khối Công nghệ & Kỹ thuật'}
-- Cấp bậc: Chuyên viên / Kỹ sư Cấp cao (Senior / Lead Specialist)
-- Mô hình làm việc: Toàn thời gian (Hybrid / Linh hoạt kết hợp Onsite & Remote)
-- Ngày lập tiêu chuẩn: ${new Date(created_at).toLocaleDateString('vi-VN')}
-- Mã tham chiếu nội bộ: JD-${job.id.substring(0, 8).toUpperCase()}
+• Chức danh: ${title}
+• Cấp bậc: Chuyên viên / Kỹ sư Cấp cao (Senior / Lead Specialist)
+• Mô hình làm việc: Toàn thời gian (Hybrid / Linh hoạt kết hợp Onsite & Remote)
+• Báo cáo cho: Trưởng bộ phận / Quản lý kỹ thuật
 
 II. MỤC TIÊU & SỨ MỆNH CÔNG VIỆC (JOB MISSION)
---------------------------------------------------------------------------------
 ${description ? description : `Chịu trách nhiệm trực tiếp trong việc phân tích, thiết kế, hiện thực hóa các giải pháp phần mềm cốt lõi; nâng cao độ tin cậy và khả năng mở rộng của hệ thống công nghệ thông tin phục vụ chiến lược kinh doanh của doanh nghiệp.`}
 
 III. TRÁCH NHIỆM & NHIỆM VỤ CỤ THỂ (KEY RESPONSIBILITIES)
---------------------------------------------------------------------------------
 1. Thiết kế & Phát triển:
-   - Trực tiếp tham gia nghiên cứu, phát triển và làm chủ kiến trúc các module trọng yếu.
-   - Ứng dụng thành thạo các công nghệ chủ đạo: ${skillsStr}.
-   - Đảm bảo mã nguồn (Clean Code) tuân thủ nghiêm ngặt các quy chuẩn bảo mật và hiệu năng cao.
+• Trực tiếp tham gia nghiên cứu, phát triển và làm chủ kiến trúc các module trọng yếu.
+• Ứng dụng thành thạo các công nghệ chủ đạo: ${skillsStr}.
+• Đảm bảo mã nguồn (Clean Code) tuân thủ nghiêm ngặt các quy chuẩn bảo mật và hiệu năng cao.
 
 2. Quản trị Chất lượng & Vận hành:
-   - Tham gia rà soát mã nguồn (Code Review), kiểm thử tự động (Unit Test / Integration Test).
-   - Giám sát, phát hiện và khắc phục nhanh chóng các sự cố phát sinh trên môi trường Production.
-   - Tối ưu hóa truy vấn cơ sở dữ liệu và cải thiện độ trễ phản hồi hệ thống.
+• Tham gia rà soát mã nguồn (Code Review), kiểm thử tự động (Unit Test / Integration Test).
+• Giám sát, phát hiện và khắc phục nhanh chóng các sự cố phát sinh trên môi trường Production.
+• Tối ưu hóa truy vấn cơ sở dữ liệu và cải thiện độ trễ phản hồi hệ thống.
 
 3. Hợp tác & Phối hợp Liên chức năng:
-   - Phối hợp chặt chẽ với Product Owner, Solution Architect và đội ngũ QA/DevOps theo quy trình Agile/Scrum.
-   - Đề xuất các cải tiến kỹ thuật, cập nhật công nghệ mới nhằm nâng cao năng suất toàn đội ngũ.
+• Phối hợp chặt chẽ với Product Owner, Solution Architect và đội ngũ QA/DevOps theo quy trình Agile/Scrum.
+• Đề xuất các cải tiến kỹ thuật, cập nhật công nghệ mới nhằm nâng cao năng suất toàn đội ngũ.
 
 IV. TIÊU CHUẨN NĂNG LỰC & YÊU CẦU ỨNG VIÊN (REQUIREMENTS)
---------------------------------------------------------------------------------
 1. Kinh nghiệm chuyên môn:
-   - Tối thiểu ${expYears} năm kinh nghiệm làm việc thực tế ở vị trí tương đương.
-   - Đã từng tham gia vào các dự án có quy mô từ vừa đến lớn, chịu tải cao và yêu cầu tính sẵn sàng liên tục.
+• Tối thiểu ${expYears} năm kinh nghiệm làm việc thực tế ở vị trí tương đương.
+• Đã từng tham gia vào các dự án có quy mô từ vừa đến lớn, chịu tải cao và yêu cầu tính sẵn sàng liên tục.
 
-2. Kỹ năng kỹ thuật bắt buộc:
-   - Nắm vững và làm chủ: ${skillsStr}.
+2. Kỹ năng kỹ thuật:
+• Kỹ năng bắt buộc: ${skillsStr}.
+• Kỹ năng ưu tiên (Điểm thưởng): ${prefSkillsStr}.
 
-3. Kỹ năng ưu tiên (Điểm thưởng):
-   - Có kinh nghiệm với: ${prefSkillsStr}.
+3. Trình độ học vấn & Kỹ năng bổ trợ:
+• Trình độ: Tốt nghiệp ${edu}.
+• Tư duy phản biện logic, kỹ năng giải quyết vấn đề dưới áp lực tốt.
+• Tinh thần chủ động, trách nhiệm cao và khả năng đọc hiểu tài liệu chuyên ngành tốt.
 
-4. Trình độ học vấn & Kỹ năng bổ trợ:
-   - Trình độ: Tốt nghiệp ${edu}.
-   - Tư duy phản biện logic, kỹ năng giải quyết vấn đề dưới áp lực tốt.
-   - Tinh thần chủ động, trách nhiệm cao và khả năng đọc hiểu tài liệu chuyên ngành tốt.
-
-5. Trọng số đánh giá năng lực tuyển dụng (AI Screening Distribution):
-   - Tiêu chí Kỹ năng (Skills): ${Math.round(weights.skills * 100)}%
-   - Tiêu chí Kinh nghiệm (Experience): ${Math.round(weights.experience * 100)}%
-   - Tiêu chí Học vấn (Education): ${Math.round(weights.education * 100)}%
+4. Trọng số thẩm định năng lực tuyển dụng (AI Screening Distribution):
+• Tiêu chí Kỹ năng (Skills): ${Math.round(weights.skills * 100)}%
+• Tiêu chí Kinh nghiệm (Experience): ${Math.round(weights.experience * 100)}%
+• Tiêu chí Học vấn (Education): ${Math.round(weights.education * 100)}%
 
 V. CHẾ ĐỘ ĐÃI NGỘ & LỘ TRÌNH PHÁT TRIỂN (BENEFITS & PERKS)
---------------------------------------------------------------------------------
-- Thu nhập hấp dẫn: Lương cạnh tranh theo năng lực ($1,500 - $3,500+) + Thưởng hiệu suất dự án.
-- Lương tháng 13, thưởng các dịp Lễ / Tết và đánh giá tăng lương định kỳ 2 lần/năm.
-- Chế độ bảo hiểm: Đầy đủ BHXH, BHYT theo luật định + Gói Bảo hiểm Sức khỏe Cao cấp (PVI / Bảo Việt).
-- Trang thiết bị: Cấp phát Laptop cấu hình cao (MacBook Pro / ThinkPad) và màn hình đồ họa chuyên dụng.
-- Đào tạo & Phát triển: Tài trợ 100% ngân sách thi chứng chỉ quốc tế và các khóa học nâng cao tay nghề.
-- Môi trường & Đời sống: Du lịch teambuilding hàng năm, câu lạc bộ thể thao, pantry trà nước miễn phí.
+• Thu nhập hấp dẫn: Lương cạnh tranh theo năng lực ($1,500 - $3,500+) + Thưởng hiệu suất dự án.
+• Lương tháng 13, thưởng các dịp Lễ / Tết và đánh giá tăng lương định kỳ 2 lần/năm.
+• Chế độ bảo hiểm: Đầy đủ BHXH, BHYT theo luật định + Gói Bảo hiểm Sức khỏe Cao cấp (PVI / Bảo Việt).
+• Trang thiết bị: Cấp phát Laptop cấu hình cao (MacBook Pro / ThinkPad) và màn hình chuyên dụng.
+• Đào tạo & Phát triển: Tài trợ 100% ngân sách thi chứng chỉ quốc tế và các khóa học nâng cao tay nghề.
+• Môi trường & Đời sống: Du lịch teambuilding hàng năm, câu lạc bộ thể thao, pantry trà nước miễn phí.
 
 VI. QUY TRÌNH PHỎNG VẤN & ỨNG TUYỂN (HIRING PROCESS)
---------------------------------------------------------------------------------
-- Vòng 1: Thẩm định hồ sơ bằng AI Screening & Đội ngũ Tuyển dụng (Trong 24h).
-- Vòng 2: Phỏng vấn Chuyên môn kỹ thuật với Technical Lead / Head of Engineering.
-- Vòng 3: Thảo luận Văn hóa, định hướng phát triển & Thỏa thuận Offer đãi ngộ.
-- Kênh nộp hồ sơ: Gửi CV trực tiếp qua hệ thống hoặc email: tuyendung@doanhnghiep.com
-
-================================================================================
-              TÀI LIỆU TIÊU CHUẨN LƯU HÀNH NỘI BỘ VÀ CỔNG TUYỂN DỤNG
-================================================================================`;
+• Vòng 1: Thẩm định hồ sơ bằng AI Screening & Đội ngũ Tuyển dụng (Trong 24h).
+• Vòng 2: Phỏng vấn Chuyên môn kỹ thuật với Technical Lead / Head of Engineering.
+• Vòng 3: Thảo luận Văn hóa, định hướng phát triển & Thỏa thuận Offer đãi ngộ.
+• Kênh nộp hồ sơ: Gửi CV trực tiếp qua hệ thống hoặc email: tuyendung@doanhnghiep.com`;
 }
 
 function buildLinksFooter(jdPdfUrl?: string, applyFormUrl?: string): string {
