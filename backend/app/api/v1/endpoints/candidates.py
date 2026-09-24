@@ -8,6 +8,9 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.job import JobDescription
 from app.models.candidate import Candidate
+from app.models.evaluation import Evaluation
+from app.models.audit_log import AuditLog
+from app.models.candidate_pdf import CandidatePDF
 from app.schemas.candidate import CandidateResponseSchema
 from app.services.pdf_service import pdf_service
 from app.services.pii_service import pii_service
@@ -74,6 +77,7 @@ async def upload_candidates(
 
             candidate = Candidate(
                 job_id=effective_job_id,
+                job_title=job.title if job else "Ứng viên tự do / Chung",
                 original_filename=upload_file.filename,
                 file_path=file_path,
                 masked_name=masked_name,
@@ -129,4 +133,40 @@ def get_candidate_pdf(candidate_id: str, db: Session = Depends(get_db)):
             "Content-Disposition": f"inline; filename=\"{candidate.original_filename}\""
         }
     )
+
+
+@router.delete("/{candidate_id}", status_code=status.HTTP_200_OK)
+def delete_candidate(candidate_id: str, db: Session = Depends(get_db)):
+    """Xóa vĩnh viễn một hồ sơ ứng viên khỏi hệ thống (bao gồm file PDF và kết quả chấm điểm)."""
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
+
+    try:
+        # 1. Tìm các evaluation liên quan và xóa audit logs
+        evaluations = db.query(Evaluation).filter(Evaluation.candidate_id == candidate_id).all()
+        for ev in evaluations:
+            db.query(AuditLog).filter(AuditLog.evaluation_id == ev.id).delete(synchronize_session=False)
+            db.delete(ev)
+
+        # 2. Xóa bản sao PDF trong database
+        db.query(CandidatePDF).filter(CandidatePDF.candidate_id == candidate_id).delete(synchronize_session=False)
+
+        # 3. Xóa file PDF vật lý trên đĩa nếu còn tồn tại
+        resolved_path = resolve_candidate_file_path(candidate.file_path)
+        if resolved_path and os.path.exists(resolved_path):
+            try:
+                os.remove(resolved_path)
+            except Exception as e:
+                print(f"Lỗi khi xóa file đĩa: {e}")
+
+        # 4. Xóa ứng viên khỏi bảng candidates
+        candidate_name = candidate.masked_name
+        db.delete(candidate)
+        db.commit()
+        return {"message": f"Đã xóa vĩnh viễn hồ sơ của {candidate_name} thành công.", "deleted_id": candidate_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Lỗi khi xóa hồ sơ ứng viên: {str(e)}")
+
 

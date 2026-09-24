@@ -49,6 +49,10 @@ export const candidateApi = {
   getPdfUrl: (candidateId: string): string => {
     return `${API_BASE_URL}/candidates/${candidateId}/pdf`;
   },
+  delete: async (candidateId: string): Promise<{ message: string; deleted_id: string }> => {
+    const response = await apiClient.delete(`/candidates/${candidateId}`);
+    return response.data;
+  },
 };
 
 export const evaluationApi = {

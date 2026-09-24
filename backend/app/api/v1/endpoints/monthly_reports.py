@@ -65,7 +65,7 @@ def get_monthly_candidates(
         result.append({
             "id": c.id,
             "job_id": c.job_id,
-            "job_title": job_map.get(c.job_id, "Hồ sơ lưu trữ chung (Đã dọn JD)"),
+            "job_title": c.job_title or job_map.get(c.job_id, "Hồ sơ lưu trữ chung"),
             "masked_name": c.masked_name,
             "original_filename": c.original_filename,
             "status": c.status,

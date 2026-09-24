@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Calendar, Users, CheckCircle2, XCircle, Clock, Search, Mail, Eye, RefreshCw
+  Calendar, Users, CheckCircle2, XCircle, Clock, Search, Mail, Eye, RefreshCw, Trash2
 } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
+import { candidateApi } from '../../services/api';
 import { EmailInviteModal } from './EmailInviteModal';
 import { ApprovalWorkflowModal } from './ApprovalWorkflowModal';
 import { CandidateDetailDrawer } from './CandidateDetailDrawer';
@@ -41,6 +42,30 @@ export const MonthlyCandidatesView: React.FC = () => {
   useEffect(() => {
     void loadCandidates();
   }, [selectedMonth, selectedYear]);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteCandidate = async (candidate: MonthlyCandidate) => {
+    const confirmMsg = `Bạn có chắc chắn muốn xóa vĩnh viễn hồ sơ của ${candidate.masked_name} (${candidate.original_filename}) không?\n\nToàn bộ dữ liệu điểm AI, câu hỏi phỏng vấn và file CV gốc sẽ bị xóa sạch khỏi hệ thống.`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      setDeletingId(candidate.id);
+      await candidateApi.delete(candidate.id);
+      setCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+      if (inspectCandidate?.id === candidate.id) {
+        setInspectCandidate(null);
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi xóa ứng viên:', err);
+      const detail = err?.response?.data?.detail || 'Không thể xóa hồ sơ ứng viên này.';
+      alert(detail);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Statistics
   const stats = useMemo(() => {
@@ -322,6 +347,20 @@ export const MonthlyCandidatesView: React.FC = () => {
                 >
                   <Eye className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Xem CV</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={deletingId === candidate.id}
+                  onClick={() => handleDeleteCandidate(candidate)}
+                  className="p-2 bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700/60 hover:border-rose-500/30 rounded-xl transition-all disabled:opacity-50"
+                  title="Xóa vĩnh viễn hồ sơ ứng viên này"
+                >
+                  {deletingId === candidate.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
                 </button>
 
                 {candidate.approval_status !== 'REJECTED' && (

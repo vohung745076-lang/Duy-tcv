@@ -5,6 +5,7 @@ from datetime import datetime
 class CandidateResponseSchema(BaseModel):
     id: str
     job_id: Optional[str] = None
+    job_title: Optional[str] = None
     original_filename: str
     masked_name: str
     status: str

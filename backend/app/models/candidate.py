@@ -5,6 +5,7 @@ class Candidate(BaseModel):
     __tablename__ = "candidates"
 
     job_id = Column(String, ForeignKey("job_descriptions.id", ondelete="SET NULL"), nullable=True, index=True)
+    job_title = Column(String, nullable=True) # Lưu cứng tên vị trí (Snapshot) để bảo toàn khi xóa Job
     original_filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     masked_name = Column(String, nullable=False) # Candidate #01, Candidate #02

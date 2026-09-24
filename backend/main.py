@@ -28,6 +28,7 @@ def run_auto_migrations():
         ("candidates", "interview_time", "VARCHAR"),
         ("candidates", "interview_location", "VARCHAR"),
         ("candidates", "reviewed_by", "VARCHAR"),
+        ("candidates", "job_title", "VARCHAR"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in columns_to_add:
@@ -42,6 +43,57 @@ def run_auto_migrations():
                     print(f"Auto-migration: Added column {col} to {table}")
             except Exception as e:
                 print(f"Auto-migration note for {table}.{col}: {e}")
+
+        # Đồng bộ snapshot job_title cho các ứng viên cũ
+        try:
+            conn.execute(text("""
+                UPDATE candidates 
+                SET job_title = (SELECT title FROM job_descriptions WHERE job_descriptions.id = candidates.job_id)
+                WHERE (job_title IS NULL OR job_title = '') AND job_id IS NOT NULL;
+            """))
+            conn.commit()
+        except Exception as e:
+            print(f"Auto-migration snapshot note: {e}")
+
+        # Kiểm tra bảng evaluations để đảm bảo job_id là NULLABLE (tránh lỗi SQLite NOT NULL khi xóa Job)
+        try:
+            result = conn.execute(text("PRAGMA table_info(evaluations);")).fetchall()
+            job_id_col = next((r for r in result if r[1] == 'job_id'), None)
+            if job_id_col and job_id_col[3] == 1:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS evaluations_temp (
+                        id VARCHAR NOT NULL PRIMARY KEY,
+                        candidate_id VARCHAR NOT NULL,
+                        job_id VARCHAR,
+                        overall_score FLOAT NOT NULL,
+                        skills_score FLOAT NOT NULL,
+                        experience_score FLOAT NOT NULL,
+                        education_score FLOAT NOT NULL,
+                        breakdown JSON,
+                        interview_questions JSON,
+                        ai_summary TEXT,
+                        hr_override_score FLOAT,
+                        hr_override_reason TEXT,
+                        evaluation_status VARCHAR,
+                        created_at DATETIME,
+                        updated_at DATETIME,
+                        FOREIGN KEY(candidate_id) REFERENCES candidates (id),
+                        FOREIGN KEY(job_id) REFERENCES job_descriptions (id)
+                    );
+                """))
+                conn.execute(text("""
+                    INSERT INTO evaluations_temp 
+                    SELECT id, candidate_id, job_id, overall_score, skills_score, experience_score, education_score, breakdown, interview_questions, ai_summary, hr_override_score, hr_override_reason, evaluation_status, created_at, updated_at 
+                    FROM evaluations;
+                """))
+                conn.execute(text("DROP TABLE evaluations;"))
+                conn.execute(text("ALTER TABLE evaluations_temp RENAME TO evaluations;"))
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_evaluations_candidate_id ON evaluations (candidate_id);"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evaluations_job_id ON evaluations (job_id);"))
+                conn.commit()
+                print("Auto-migration: evaluations.job_id is now nullable.")
+        except Exception as e:
+            print(f"Auto-migration evaluations nullability note: {e}")
 
 try:
     run_auto_migrations()

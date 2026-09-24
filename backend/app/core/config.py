@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = "Ban Tuyển dụng Nhân sự"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=os.path.join(BASE_DIR, ".env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )

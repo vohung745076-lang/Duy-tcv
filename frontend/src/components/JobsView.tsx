@@ -95,7 +95,7 @@ export const JobsView: React.FC<JobsViewProps> = ({
                         e.stopPropagation();
                         if (
                           window.confirm(
-                            `Bạn có chắc chắn muốn xóa vị trí "${job.title}" không?\n\nToàn bộ hồ sơ ứng viên và kết quả chấm điểm của vị trí này cũng sẽ được dọn sạch.`
+                            `Bạn có chắc chắn muốn xóa vị trí "${job.title}" khỏi giao diện làm việc không?\n\nToàn bộ hồ sơ ứng viên và kết quả chấm điểm của vị trí này vẫn sẽ được lưu trữ an toàn trong Kho nhân sự theo tháng.`
                           )
                         ) {
                           onDeleteJob(job.id);
