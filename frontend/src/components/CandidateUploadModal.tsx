@@ -28,13 +28,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      const pdfFiles = files.filter(
-        (file) =>
-          file.name.toLowerCase().endsWith('.pdf') ||
-          file.type.includes('pdf') ||
-          file.type === ''
-      );
-      setSelectedFiles(pdfFiles.length > 0 ? pdfFiles : files);
+      setSelectedFiles(files);
     }
   };
 
@@ -42,13 +36,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
-      const pdfFiles = files.filter(
-        (file) =>
-          file.name.toLowerCase().endsWith('.pdf') ||
-          file.type.includes('pdf') ||
-          file.type === ''
-      );
-      setSelectedFiles(pdfFiles.length > 0 ? pdfFiles : files);
+      setSelectedFiles(files);
     }
   };
 
@@ -58,12 +46,17 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
     try {
       const jobId = activeJob ? activeJob.id : 'general';
       const result = await candidateApi.uploadBulk(jobId, selectedFiles);
-      onUploaded(result);
-      setSelectedFiles([]);
-      onClose();
+      if (result && result.length > 0) {
+        alert(`✅ Đã tiếp nhận và lưu trữ thành công ${result.length} hồ sơ ứng viên vào hệ thống!`);
+        onUploaded(result);
+        setSelectedFiles([]);
+        onClose();
+      } else {
+        alert('Không có hồ sơ nào được tạo. Vui lòng kiểm tra lại file của bạn!');
+      }
     } catch (err: any) {
       console.error('Lỗi tải file CV:', err);
-      const detail = err?.response?.data?.detail || 'Không thể tải lên file CV. Vui lòng kiểm tra lại định dạng file PDF!';
+      const detail = err?.response?.data?.detail || 'Không thể tải lên file CV. Vui lòng kiểm tra lại file tài liệu của bạn!';
       alert(detail);
     } finally {
       setIsUploading(false);

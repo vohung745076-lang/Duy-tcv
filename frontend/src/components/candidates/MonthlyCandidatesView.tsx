@@ -41,6 +41,19 @@ export const MonthlyCandidatesView: React.FC = () => {
 
   useEffect(() => {
     void loadCandidates();
+
+    const handleSync = () => {
+      const monthParam = selectedMonth === 'ALL' ? undefined : selectedMonth;
+      monthlyReportService.fetchMonthlyCandidates(monthParam, selectedYear).then(setCandidates).catch(() => {});
+    };
+
+    window.addEventListener('focus', handleSync);
+    const interval = setInterval(handleSync, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleSync);
+      clearInterval(interval);
+    };
   }, [selectedMonth, selectedYear]);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);

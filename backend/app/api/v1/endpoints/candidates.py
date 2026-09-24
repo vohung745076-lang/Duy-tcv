@@ -54,35 +54,37 @@ async def upload_candidates(
         os.makedirs(job_storage_dir, exist_ok=True)
 
         for idx, upload_file in enumerate(files):
-            if not upload_file.filename.lower().endswith(".pdf"):
-                continue
-
+            orig_name = upload_file.filename if upload_file.filename else f"Document_{idx+1}.pdf"
             candidate_number = current_count + idx + 1
-            masked_name = f"Candidate #{candidate_number:02d}"
 
-            # Save file PDF lên đĩa tạm thời
-            file_path = os.path.join(job_storage_dir, f"{candidate_number}_{upload_file.filename}")
+            # Chuẩn hóa tên file lưu trữ (tự động gắn .pdf nếu file từ iPhone như Doc1 không có đuôi)
+            clean_save_name = orig_name if orig_name.lower().endswith(".pdf") else f"{orig_name}.pdf"
+            file_path = os.path.join(job_storage_dir, f"{candidate_number}_{clean_save_name}")
+
+            # Save file lên đĩa tạm thời
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(upload_file.file, buffer)
 
-            # Extract text & PII Masking
+            # Extract text & PII Masking (hỗ trợ mọi file PDF / scan từ di động)
             raw_text = ""
             masked_text = ""
             try:
                 raw_text = pdf_service.extract_text(file_path)
+                if not raw_text or not raw_text.strip():
+                    raw_text = f"Hồ sơ ứng viên: {orig_name}"
                 masked_text = pii_service.mask_text(raw_text)
             except Exception as e:
-                raw_text = f"[Lỗi trích xuất PDF: {str(e)}]"
+                raw_text = f"[Hồ sơ ứng viên: {orig_name} - {str(e)}]"
                 masked_text = raw_text
 
             # Tự động bóc tách Tên thật, Email và Số điện thoại từ CV
-            contact_info = pii_service.extract_contact_info(raw_text, upload_file.filename)
+            contact_info = pii_service.extract_contact_info(raw_text, orig_name)
             extracted_name = contact_info["name"] if contact_info.get("name") else f"Candidate #{candidate_number:02d}"
 
             candidate = Candidate(
                 job_id=effective_job_id,
                 job_title=job.title if job else "Ứng viên tự do / Chung",
-                original_filename=upload_file.filename,
+                original_filename=orig_name,
                 file_path=file_path,
                 masked_name=extracted_name,
                 email=contact_info.get("email"),
@@ -93,6 +95,9 @@ async def upload_candidates(
             )
             db.add(candidate)
             created_candidates.append(candidate)
+
+        if len(created_candidates) == 0:
+            raise HTTPException(status_code=400, detail="Không có tệp nào được chọn để nạp.")
 
         db.commit()
         for c in created_candidates:

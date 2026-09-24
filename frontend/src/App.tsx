@@ -82,6 +82,24 @@ export function App() {
     }
   }, [activeJob, fetchCandidates]);
 
+  // Tự động đồng bộ đa người dùng (khi chuyển tab hoặc định kỳ 10 giây/lần)
+  useEffect(() => {
+    const handleSync = () => {
+      void fetchJobs();
+      if (activeJob) {
+        void fetchCandidates(activeJob.id);
+      }
+    };
+
+    window.addEventListener('focus', handleSync);
+    const interval = setInterval(handleSync, 10000);
+
+    return () => {
+      window.removeEventListener('focus', handleSync);
+      clearInterval(interval);
+    };
+  }, [activeJob, fetchJobs, fetchCandidates]);
+
   const handleJobCreated = (newJob: Job) => {
     setJobs([newJob, ...jobs]);
     setActiveJob(newJob);
