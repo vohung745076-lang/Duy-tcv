@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # Cấu hình máy chủ gửi Email SMTP (Gmail / Outlook / Custom SMTP)
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-    SMTP_FROM_NAME: str = "Ban Tuyển dụng Nhân sự"
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "vohung745076@gmail.com")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "yxcf oujo djgy vydt")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Ban Tuyển dụng Nhân sự")
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(BASE_DIR, ".env"),
