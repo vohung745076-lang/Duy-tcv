@@ -37,15 +37,16 @@ async def upload_candidates(
     db: Session = Depends(get_db)
 ):
     """Tải lên nhiều file PDF CV, bóc tách text, che mờ PII và sao lưu PDF vào candidate_pdfs."""
-    job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")
+    # Kiểm tra xem Job có tồn tại không. Nếu không (hoặc đã bị xóa), lưu trực tiếp CV vào kho candidates
+    job = db.query(JobDescription).filter(JobDescription.id == job_id).first() if job_id else None
+    effective_job_id = job.id if job else None
 
-    # Đếm số ứng viên hiện tại để tạo bí danh Candidate #01, #02...
-    current_count = db.query(Candidate).filter(Candidate.job_id == job_id).count()
+    # Đếm số ứng viên hiện tại trong DB để tạo bí danh Candidate #01, #02...
+    current_count = db.query(Candidate).count()
 
     created_candidates = []
-    job_storage_dir = os.path.join(settings.STORAGE_DIR, "uploads", job_id)
+    safe_folder_name = job_id if job_id else "general"
+    job_storage_dir = os.path.join(settings.STORAGE_DIR, "uploads", safe_folder_name)
     os.makedirs(job_storage_dir, exist_ok=True)
 
     for idx, upload_file in enumerate(files):
@@ -71,7 +72,7 @@ async def upload_candidates(
             masked_text = raw_text
 
         candidate = Candidate(
-            job_id=job_id,
+            job_id=effective_job_id,
             original_filename=upload_file.filename,
             file_path=file_path,
             masked_name=masked_name,

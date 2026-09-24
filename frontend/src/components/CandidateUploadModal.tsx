@@ -22,7 +22,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
 
-  if (!isOpen || !activeJob) return null;
+  if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -43,7 +43,8 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
     if (selectedFiles.length === 0) return;
     setIsUploading(true);
     try {
-      const result = await candidateApi.uploadBulk(activeJob.id, selectedFiles);
+      const jobId = activeJob ? activeJob.id : 'general';
+      const result = await candidateApi.uploadBulk(jobId, selectedFiles);
       onUploaded(result);
       setSelectedFiles([]);
       onClose();
@@ -86,7 +87,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
         <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
           <div>
             <h3 className="font-bold text-white text-base">Tiếp nhận Hồ sơ Ứng viên Tuyển dụng</h3>
-            <p className="text-xs text-slate-400">Vị trí: <span className="text-cyan-400 font-semibold">{activeJob.title}</span></p>
+            <p className="text-xs text-slate-400">Vị trí: <span className="text-cyan-400 font-semibold">{activeJob ? activeJob.title : 'Kho hồ sơ lưu trữ chung'}</span></p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
