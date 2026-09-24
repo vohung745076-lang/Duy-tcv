@@ -47,8 +47,10 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
       onUploaded(result);
       setSelectedFiles([]);
       onClose();
-    } catch {
-      alert('Không thể tải lên file CV. Vui lòng kiểm tra lại định dạng file PDF.');
+    } catch (err: any) {
+      console.error('Lỗi tải file CV:', err);
+      const detail = err?.response?.data?.detail || 'Không thể tải lên file CV. Vui lòng kiểm tra lại định dạng file PDF!';
+      alert(detail);
     } finally {
       setIsUploading(false);
     }

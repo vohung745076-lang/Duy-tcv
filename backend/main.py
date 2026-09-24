@@ -2,6 +2,7 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1.router import api_router
@@ -15,6 +16,31 @@ from app.models.candidate_pdf import CandidatePDF
 
 # Tự động tạo bảng DB nếu chưa có
 Base.metadata.create_all(bind=engine)
+
+# Tự động đồng bộ các cột mới vào PostgreSQL / SQLite nếu bảng đã tồn tại
+def run_auto_migrations():
+    columns_to_add = [
+        ("candidates", "email", "VARCHAR"),
+        ("candidates", "phone", "VARCHAR"),
+        ("candidates", "approval_status", "VARCHAR DEFAULT 'PENDING'"),
+        ("candidates", "rejection_reason", "TEXT"),
+        ("candidates", "interview_type", "VARCHAR"),
+        ("candidates", "interview_time", "VARCHAR"),
+        ("candidates", "interview_location", "VARCHAR"),
+        ("candidates", "reviewed_by", "VARCHAR"),
+    ]
+    with engine.connect() as conn:
+        for table, col, col_type in columns_to_add:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type};"))
+                conn.commit()
+            except Exception as e:
+                print(f"Auto-migration note for {table}.{col}: {e}")
+
+try:
+    run_auto_migrations()
+except Exception as e:
+    print(f"Auto-migration warning: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
