@@ -80,11 +80,19 @@ export interface BreakdownCategory {
   evidence: EvidenceItem[];
 }
 
+export interface AdditionalHighlight {
+  category: string;
+  title: string;
+  raw_quote: string;
+  value_add_analysis: string;
+}
+
 export interface EvaluationBreakdown {
   skills: BreakdownCategory;
   experience: BreakdownCategory;
   education: BreakdownCategory;
   evidence?: EvidenceItem[];
+  additional_highlights?: AdditionalHighlight[];
 }
 
 export interface InterviewQuestion {

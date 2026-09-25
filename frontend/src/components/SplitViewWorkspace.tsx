@@ -12,10 +12,13 @@ import {
   ChevronRight,
   ChevronLeft,
   Lock,
+  Eye,
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
 import type { Candidate, Evaluation, Job } from '../types';
 import type { UserProfile } from '../services/supabase';
+import { SmartCVViewer } from './cv-viewer/SmartCVViewer';
+import { AdditionalHighlightsSection } from './cv-viewer/AdditionalHighlightsSection';
 
 interface SplitViewWorkspaceProps {
   candidate: Candidate;
@@ -40,8 +43,10 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [overrideScore, setOverrideScore] = useState<number>(85);
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
-  const [activeTab, setActiveTab] = useState<'evidence' | 'interview' | 'raw_text'>('evidence');
+  const [activeTab, setActiveTab] = useState<'evidence' | 'additional' | 'interview' | 'raw_text'>('evidence');
   const [mobileTab, setMobileTab] = useState<'analysis' | 'pdf'>('analysis');
+  const [leftPaneMode, setLeftPaneMode] = useState<'smart_audit' | 'raw_pdf'>('smart_audit');
+  const [activeHighlightQuote, setActiveHighlightQuote] = useState<string | null>(null);
 
   const pdfUrl = candidateApi.getPdfUrl(candidate.id);
 
@@ -106,6 +111,15 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
     ...(evaluation?.breakdown?.education?.evidence || []),
   ];
 
+  const additionalHighlights = evaluation?.breakdown?.additional_highlights || [];
+
+  const handleSelectQuoteForAudit = (quote: string) => {
+    setActiveHighlightQuote(quote);
+    if (leftPaneMode !== 'smart_audit') {
+      setLeftPaneMode('smart_audit');
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-105px)] sm:h-[calc(100vh-110px)] bg-slate-900 overflow-hidden w-full max-w-full">
       {/* Top Workspace Control Header */}
@@ -165,43 +179,79 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
           onClick={() => setMobileTab('pdf')}
           className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             mobileTab === 'pdf'
-              ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <FileText className="w-3.5 h-3.5 text-blue-300" />
-          <span>Xem Bản CV (PDF)</span>
+          <Eye className="w-3.5 h-3.5 text-emerald-300" />
+          <span>Bản Đối Soát CV</span>
         </button>
       </div>
 
       {/* Split-View Workspace Area */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-700/80 overflow-hidden">
-        {/* PANE 1: PDF Viewer */}
+        {/* PANE 1: Smart Audit & PDF Viewer */}
         <div
           className={`${
             mobileTab === 'pdf' ? 'flex' : 'hidden lg:flex'
           } flex-col bg-slate-950 h-full overflow-hidden`}
         >
           <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4 py-2 flex items-center justify-between text-xs text-slate-400 shrink-0">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <FileText className="w-4 h-4 text-blue-400" /> BẢN CV GỐC (PDF VIEWER)
-            </span>
+            {/* View Mode Switcher */}
+            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setLeftPaneMode('smart_audit')}
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  leftPaneMode === 'smart_audit'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Bản đối soát thông minh: Khoanh vùng Xanh Lá cho tiêu chí khớp, Xanh Dương cho điểm nêu thêm"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Đối Soát Trực Quan</span>
+              </button>
+              <button
+                onClick={() => setLeftPaneMode('raw_pdf')}
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  leftPaneMode === 'raw_pdf'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Xem bản file PDF gốc"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF Gốc</span>
+              </button>
+            </div>
+
             <a
               href={pdfUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-blue-400 hover:underline text-[11px]"
+              className="text-blue-400 hover:underline text-[11px] shrink-0"
             >
-              Mở cửa sổ mới ↗
+              Mở file gốc ↗
             </a>
           </div>
 
-          <div className="flex-1 w-full h-full bg-slate-950">
-            <iframe
-              src={pdfUrl}
-              className="w-full h-full border-0"
-              title={`PDF viewer for ${candidate.masked_name}`}
-            />
+          <div className="flex-1 w-full h-full bg-slate-950 overflow-hidden">
+            {leftPaneMode === 'smart_audit' ? (
+              <SmartCVViewer
+                cvText={candidate.masked_text || candidate.raw_text || candidate.text_preview || ''}
+                matchedEvidences={allEvidences.filter((e) => e.matched)}
+                additionalHighlights={additionalHighlights}
+                activeHighlightQuote={activeHighlightQuote}
+                candidateName={candidate.masked_name}
+                onClearActiveHighlight={() => setActiveHighlightQuote(null)}
+              />
+            ) : (
+              <iframe
+                src={pdfUrl}
+                className="w-full h-full border-0"
+                title={`PDF viewer for ${candidate.masked_name}`}
+              />
+            )}
           </div>
         </div>
 
@@ -292,22 +342,32 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
               </div>
 
               {/* Navigation Sub-Tabs */}
-              <div className="flex border-b border-slate-700 text-xs font-semibold gap-3 sm:gap-6 overflow-x-auto no-scrollbar">
+              <div className="flex border-b border-slate-700 text-xs font-semibold gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
                 <button
                   onClick={() => setActiveTab('evidence')}
                   className={`pb-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     activeTab === 'evidence'
-                      ? 'text-blue-400 border-b-2 border-blue-500'
+                      ? 'text-emerald-400 border-b-2 border-emerald-500 font-bold'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Award className="w-4 h-4" /> Bằng chứng đối soát (Evidence)
+                  <Award className="w-4 h-4 text-emerald-400" /> Bằng chứng đối soát ({allEvidences.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('additional')}
+                  className={`pb-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                    activeTab === 'additional'
+                      ? 'text-cyan-400 border-b-2 border-cyan-500 font-bold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-cyan-400" /> Điểm Nêu Thêm ({additionalHighlights.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('interview')}
                   className={`pb-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     activeTab === 'interview'
-                      ? 'text-blue-400 border-b-2 border-blue-500'
+                      ? 'text-blue-400 border-b-2 border-blue-500 font-bold'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -317,11 +377,11 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                   onClick={() => setActiveTab('raw_text')}
                   className={`pb-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     activeTab === 'raw_text'
-                      ? 'text-blue-400 border-b-2 border-blue-500'
+                      ? 'text-blue-400 border-b-2 border-blue-500 font-bold'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <FileText className="w-4 h-4" /> Văn bản CV đã ẩn PII
+                  <FileText className="w-4 h-4" /> Văn bản CV gốc
                 </button>
               </div>
 
@@ -340,15 +400,20 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
 
                   {/* Skills Match vs Missing */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-3.5 space-y-2">
+                    <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3.5 space-y-2">
                       <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4" /> Kỹ năng đáp ứng ({matchedSkills.length})
+                        <CheckCircle className="w-4 h-4" /> Tiêu chuẩn đáp ứng ({matchedSkills.length})
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {matchedSkills.length > 0 ? (
                           matchedSkills.map((item, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 rounded text-[11px]">
-                              {item.criterion}
+                            <span
+                              key={i}
+                              onClick={() => handleSelectQuoteForAudit(item.raw_quote || item.criterion)}
+                              className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 cursor-pointer rounded-lg text-[11px] transition-all flex items-center gap-1"
+                              title="Bấm để xem vùng khoanh xanh lá trên CV"
+                            >
+                              <span>✓</span> {item.criterion.replace('Kỹ năng bắt buộc: ', '')}
                             </span>
                           ))
                         ) : (
@@ -357,15 +422,15 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                       </div>
                     </div>
 
-                    <div className="bg-slate-900/80 border border-rose-500/20 rounded-xl p-3.5 space-y-2">
+                    <div className="bg-slate-900/80 border border-rose-500/30 rounded-xl p-3.5 space-y-2">
                       <span className="font-semibold text-rose-400 flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4" /> Kỹ năng còn thiếu ({missingSkills.length})
+                        <XCircle className="w-4 h-4" /> Tiêu chuẩn còn thiếu ({missingSkills.length})
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {missingSkills.length > 0 ? (
                           missingSkills.map((item, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-rose-500/10 text-rose-300 rounded text-[11px]">
-                              {item.criterion}
+                            <span key={i} className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-lg text-[11px]">
+                              ✗ {item.criterion.replace('Kỹ năng bắt buộc: ', '')}
                             </span>
                           ))
                         ) : (
@@ -375,26 +440,68 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                     </div>
                   </div>
 
+                  {/* Highlights overview banner if any */}
+                  {additionalHighlights.length > 0 && (
+                    <div
+                      onClick={() => setActiveTab('additional')}
+                      className="p-3 bg-gradient-to-r from-cyan-950/50 to-slate-900 border border-cyan-500/30 hover:border-cyan-400 rounded-xl flex items-center justify-between cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-cyan-400" />
+                        <span className="text-cyan-300 font-semibold text-xs">
+                          Phát hiện {additionalHighlights.length} điểm mạnh & kỹ năng nêu thêm ngoài JD
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-cyan-400 flex items-center gap-1 font-semibold">
+                        Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  )}
+
                   {/* Raw Quotes / Evidence Citations */}
                   <div className="space-y-2.5">
-                    <span className="font-semibold text-slate-300 block">Trích dẫn bằng chứng từ CV (Evidence Citations):</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-300 block">Trích dẫn bằng chứng từ CV (Evidence Citations):</span>
+                      <span className="text-[10px] text-slate-500">Bấm thẻ để định vị trên CV</span>
+                    </div>
                     {allEvidences.length > 0 ? (
-                      allEvidences.map((item: any, idx: number) => (
-                        <div key={idx} className="bg-slate-850 border border-slate-700/80 rounded-xl p-3 space-y-1">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-blue-400 uppercase">{item.criterion}</span>
-                            <span className="text-slate-400 text-[10px]">{item.matched ? 'Đạt' : 'Chưa đạt'}</span>
+                      allEvidences.map((item: any, idx: number) => {
+                        const isSelected = activeHighlightQuote && (activeHighlightQuote === item.raw_quote || activeHighlightQuote === item.criterion);
+
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => handleSelectQuoteForAudit(item.raw_quote || item.criterion)}
+                            className={`p-3 space-y-1 rounded-xl border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-950/50 border-emerald-400 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                                : item.matched
+                                ? 'bg-slate-850 hover:bg-slate-800 border-slate-700/80 hover:border-emerald-500/40'
+                                : 'bg-slate-850/60 border-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-white uppercase flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${item.matched ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                                {item.criterion}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                item.matched ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                              }`}>
+                                {item.matched ? `Đạt (${item.score ?? 100}%)` : 'Chưa đạt'}
+                              </span>
+                            </div>
+                            {item.raw_quote && (
+                              <blockquote className="border-l-2 border-emerald-500 pl-3 italic text-emerald-200 text-[11px] my-1">
+                                "{item.raw_quote}"
+                              </blockquote>
+                            )}
+                            {item.explanation && (
+                              <p className="text-slate-400 text-[10px] pl-3">{item.explanation}</p>
+                            )}
                           </div>
-                          {item.raw_quote && (
-                            <blockquote className="border-l-2 border-blue-500 pl-3 italic text-slate-300 text-[11px]">
-                              "{item.raw_quote}"
-                            </blockquote>
-                          )}
-                          {item.explanation && (
-                            <p className="text-slate-400 text-[10px] pl-3">{item.explanation}</p>
-                          )}
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <p className="text-slate-500 text-xs italic">Không có trích dẫn chi tiết nào.</p>
                     )}
@@ -402,7 +509,22 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                 </div>
               )}
 
-              {/* TAB 2: Interview Questions */}
+              {/* TAB 2: Additional Highlights */}
+              {activeTab === 'additional' && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-cyan-950/30 border border-cyan-800/40 rounded-xl text-cyan-200 text-xs">
+                    Các kỹ năng chuyên sâu, chứng chỉ quốc tế hoặc năng lực công nghệ mà ứng viên sở hữu nhưng <strong>không nằm trong danh sách bắt buộc của JD</strong>. Đây là giá trị thặng dư giúp gia tăng hiệu suất công việc:
+                  </div>
+
+                  <AdditionalHighlightsSection
+                    highlights={additionalHighlights}
+                    activeQuote={activeHighlightQuote}
+                    onSelectHighlight={(hl) => handleSelectQuoteForAudit(hl.title)}
+                  />
+                </div>
+              )}
+
+              {/* TAB 3: Interview Questions */}
               {activeTab === 'interview' && (
                 <div className="space-y-3 text-xs">
                   <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-xl text-blue-200">
@@ -427,7 +549,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: Raw Masked Text */}
+              {/* TAB 4: Raw Masked Text */}
               {activeTab === 'raw_text' && (
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
                   {candidate.masked_text || candidate.raw_text || candidate.text_preview || 'Không có văn bản trích xuất.'}
