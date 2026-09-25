@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ShieldCheck, UserCheck, Lock, Mail, User } from 'lucide-react';
+import { X, ShieldCheck, Lock, Mail, User } from 'lucide-react';
 import { supabase, authService, type UserProfile } from '../../services/supabase';
 
 interface AuthModalProps {
@@ -85,21 +85,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      console.error('Auth error:', err);
+      let msg = err?.message || err?.error_description || (typeof err === 'string' ? err : '');
+      if (!msg && typeof err === 'object') {
+        try {
+          msg = JSON.stringify(err);
+          if (msg === '{}') msg = '';
+        } catch {
+          msg = '';
+        }
+      }
+      if (!msg) {
+        msg = 'Đăng nhập hoặc đăng ký thất bại. Vui lòng thử lại.';
+      } else if (msg.includes('Error sending confirmation email')) {
+        msg = 'Lỗi máy chủ gửi email xác nhận. Vui lòng tắt "Confirm email" trong Supabase Auth Settings hoặc liên hệ quản trị viên.';
+      } else if (msg.includes('Invalid login credentials')) {
+        msg = 'Email hoặc mật khẩu không chính xác. Nếu chưa có tài khoản, vui lòng bấm "Đăng ký ngay".';
+      }
+      setErrorMessage(msg);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickDemo = (demoRole: 'ADMIN' | 'RECRUITER') => {
-    const demoUser: UserProfile = {
-      id: demoRole === 'ADMIN' ? 'admin-uuid-01' : 'hr-uuid-01',
-      email: demoRole === 'ADMIN' ? 'admin@company.com' : 'hr@company.com',
-      full_name: demoRole === 'ADMIN' ? 'Trưởng phòng Nhân sự (Admin)' : 'Chuyên viên Tuyển dụng (HR)',
-      role: demoRole,
-    };
-    onAuthSuccess(demoUser);
-    onClose();
   };
 
   return (
@@ -144,29 +150,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         <div className="flex items-center my-3 text-[11px] text-slate-500">
           <div className="flex-1 border-t border-slate-800"></div>
-          <span className="px-2">hoặc chọn tài khoản Demo</span>
+          <span className="px-2">hoặc đăng nhập bằng Email</span>
           <div className="flex-1 border-t border-slate-800"></div>
-        </div>
-
-        {/* Quick Demo Switcher */}
-        <div className="my-3 p-3 bg-slate-800/60 border border-slate-700/60 rounded-xl space-y-2">
-          <span className="text-[11px] font-semibold text-slate-300 block">⚡ Chọn nhanh tài khoản Demo (1-Click):</span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('RECRUITER')}
-              className="py-1.5 px-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-            >
-              <UserCheck className="w-3.5 h-3.5" /> HR Recruiter
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('ADMIN')}
-              className="py-1.5 px-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" /> Quản trị Admin
-            </button>
-          </div>
         </div>
 
         {errorMessage && (
