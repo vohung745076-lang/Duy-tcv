@@ -16,10 +16,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- PHẦN 1: ĐỊNH NGHĨA CÁC KIỂU DỮ LIỆU ENUM
 -- ==============================================================================================
 DO $$ BEGIN
-    CREATE TYPE user_role AS ENUM ('ADMIN', 'RECRUITER');
+    CREATE TYPE user_role AS ENUM ('ADMIN', 'RECRUITER', 'PENDING');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'PENDING';
 
 -- ==============================================================================================
 -- BẢNG 1: PROFILES (Quản lý Thông tin & Phân quyền Người dùng/Nhân sự)
@@ -180,19 +181,28 @@ CREATE POLICY "System and Authenticated users can insert audit logs" ON public.a
 -- ==============================================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
+DECLARE
+    assigned_role user_role;
 BEGIN
+    IF new.email = 'vohung745076@gmail.com' THEN
+        assigned_role := 'ADMIN'::user_role;
+    ELSE
+        assigned_role := 'PENDING'::user_role;
+    END IF;
+
     INSERT INTO public.profiles (id, email, full_name, role)
     VALUES (
         new.id,
         new.email,
-        COALESCE(new.raw_user_meta_data->>'full_name', 'Chuyên viên Tuyển dụng'),
-        COALESCE((new.raw_user_meta_data->>'role')::user_role, 'RECRUITER'::user_role)
+        COALESCE(new.raw_user_meta_data->>'full_name', SPLIT_PART(new.email, '@', 1)),
+        assigned_role
     )
     ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
         full_name = EXCLUDED.full_name,
-        role = EXCLUDED.role,
         updated_at = timezone('utc'::text, now());
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
