@@ -29,16 +29,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       await authService.signInWithGoogle();
     } catch (err: any) {
-      console.warn('Google Auth Redirect / Local Fallback:', err);
-      const mockEmail = email.trim() ? email.trim() : 'hr.google@gmail.com';
-      const mockGoogleUser: UserProfile = {
-        id: 'google-user-' + Date.now(),
-        email: mockEmail,
-        full_name: mockEmail.split('@')[0],
-        role: mockEmail.toLowerCase() === 'vohung745076@gmail.com' ? 'ADMIN' : 'RECRUITER',
-      };
-      onAuthSuccess(mockGoogleUser);
-      onClose();
+      console.error('Lỗi khi đăng nhập bằng Google:', err);
+      setErrorMessage(err.message || 'Không thể kết nối đến Google OAuth. Vui lòng kiểm tra lại cấu hình.');
     } finally {
       setLoading(false);
     }

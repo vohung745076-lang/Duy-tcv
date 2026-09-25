@@ -64,7 +64,7 @@ export const authService = {
         id: user.id,
         email: user.email,
         full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
-        role: user.email === 'vohung745076@gmail.com' ? 'ADMIN' : 'RECRUITER',
+        role: user.email === 'vohung745076@gmail.com' ? 'ADMIN' : 'PENDING',
         avatar_url: user.user_metadata?.avatar_url,
       };
     }
