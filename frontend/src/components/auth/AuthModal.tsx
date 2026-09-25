@@ -44,42 +44,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (isLogin) {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim(),
           password,
         });
 
         if (error) {
-          // Fallback demo local login nếu key chưa có hoặc network error
-          const demoRole = email.includes('admin') ? 'ADMIN' : 'RECRUITER';
-          const mockUser: UserProfile = {
-            id: 'user-demo-id',
-            email,
-            full_name: email.split('@')[0],
-            role: demoRole,
-          };
-          onAuthSuccess(mockUser);
-          onClose();
-          return;
+          throw error;
         }
 
         if (data.user) {
-          const userMeta = data.user.user_metadata || {};
-          const profile: UserProfile = {
-            id: data.user.id,
-            email: data.user.email || email,
-            full_name: userMeta.full_name || 'Người dùng',
-            role: (userMeta.role as 'ADMIN' | 'RECRUITER') || 'RECRUITER',
-          };
+          const profile = await authService.fetchOrCreateProfile(data.user);
           onAuthSuccess(profile);
           onClose();
         }
       } else {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: email.trim(),
           password,
           options: {
             data: {
-              full_name: fullName,
+              full_name: fullName.trim(),
               role: role,
             },
           },
@@ -90,12 +74,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         if (data.user) {
-          const profile: UserProfile = {
-            id: data.user.id,
-            email: data.user.email || email,
-            full_name: fullName,
-            role: role,
-          };
+          if (!data.session) {
+            alert('Đăng ký tài khoản thành công! Vui lòng kiểm tra email của bạn để xác thực trước khi đăng nhập.');
+            setIsLogin(true);
+            return;
+          }
+          const profile = await authService.fetchOrCreateProfile(data.user);
           onAuthSuccess(profile);
           onClose();
         }
