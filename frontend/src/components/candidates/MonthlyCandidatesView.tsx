@@ -7,9 +7,14 @@ import { monthlyReportService } from '../../services/monthlyReportService';
 import { candidateApi } from '../../services/api';
 import { EmailInviteModal } from './EmailInviteModal';
 import { ApprovalWorkflowModal } from './ApprovalWorkflowModal';
+import type { UserProfile } from '../../services/supabase';
 import { CandidateDetailDrawer } from './CandidateDetailDrawer';
 
-export const MonthlyCandidatesView: React.FC = () => {
+interface MonthlyCandidatesViewProps {
+  currentUser?: UserProfile;
+}
+
+export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ currentUser }) => {
   const [candidates, setCandidates] = useState<MonthlyCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -423,6 +428,7 @@ export const MonthlyCandidatesView: React.FC = () => {
       {inviteCandidate && (
         <EmailInviteModal
           candidate={inviteCandidate}
+          currentUser={currentUser}
           onClose={() => setInviteCandidate(null)}
           onSuccess={handleUpdateSuccess}
         />

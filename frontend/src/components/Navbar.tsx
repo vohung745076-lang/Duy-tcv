@@ -57,29 +57,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onOpenAuth}
             className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl sm:rounded-2xl transition-all cursor-pointer group text-left"
-            title="Nhấn để đổi vai trò hoặc đăng nhập Supabase"
+            title="Nhấn để xem tài khoản Google hoặc đổi vai trò"
           >
-            <div
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs ${
-                currentUser.role === 'ADMIN'
-                  ? 'bg-purple-600/30 border border-purple-500/40 text-purple-300'
-                  : 'bg-blue-600/30 border border-blue-500/40 text-blue-300'
-              }`}
-            >
-              <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
+            {currentUser.avatar_url ? (
+              <img
+                src={currentUser.avatar_url}
+                alt={currentUser.full_name}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl object-cover border border-cyan-500/40"
+              />
+            ) : (
+              <div
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs ${
+                  currentUser.role === 'ADMIN'
+                    ? 'bg-purple-600/30 border border-purple-500/40 text-purple-300'
+                    : currentUser.role === 'PENDING'
+                    ? 'bg-amber-600/30 border border-amber-500/40 text-amber-300'
+                    : 'bg-blue-600/30 border border-blue-500/40 text-blue-300'
+                }`}
+              >
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </div>
+            )}
             <div className="hidden sm:block">
-              <span className="block text-[11px] font-bold text-white group-hover:text-cyan-300 transition-colors truncate max-w-[110px]">
+              <span className="block text-[11px] font-bold text-white group-hover:text-cyan-300 transition-colors truncate max-w-[120px]">
                 {currentUser.full_name}
               </span>
               <span
                 className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full inline-block ${
                   currentUser.role === 'ADMIN'
                     ? 'text-purple-400 bg-purple-500/10'
+                    : currentUser.role === 'PENDING'
+                    ? 'text-amber-400 bg-amber-500/10'
                     : 'text-blue-400 bg-blue-500/10'
                 }`}
               >
-                {currentUser.role === 'ADMIN' ? 'Admin' : 'HR'}
+                {currentUser.role === 'ADMIN' ? 'Admin' : currentUser.role === 'PENDING' ? 'Chờ duyệt' : 'HR'}
               </span>
             </div>
           </button>

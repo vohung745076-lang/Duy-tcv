@@ -2,15 +2,18 @@ import React, { useState } from 'react';
 import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService, type InterviewEmailPayload } from '../../services/monthlyReportService';
+import type { UserProfile } from '../../services/supabase';
 
 interface EmailInviteModalProps {
   candidate: MonthlyCandidate;
+  currentUser?: UserProfile;
   onClose: () => void;
   onSuccess: (updatedCandidate: MonthlyCandidate) => void;
 }
 
 export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
   candidate,
+  currentUser,
   onClose,
   onSuccess,
 }) => {
@@ -19,7 +22,9 @@ export const EmailInviteModal: React.FC<EmailInviteModalProps> = ({
   const [candidateEmail, setCandidateEmail] = useState(candidate.email || `${(candidate.masked_name || 'ungvien').toLowerCase().replace(/\s+/g, '')}@gmail.com`);
   const [interviewTime, setInterviewTime] = useState('09:30 AM, Ngày mai');
   const [location, setLocation] = useState('https://meet.google.com/rec-interview-room');
-  const [interviewerName, setInterviewerName] = useState('Ban Tuyển dụng & Phát triển Nhân sự');
+  const [interviewerName, setInterviewerName] = useState(
+    currentUser?.full_name ? `${currentUser.full_name} (Ban Tuyển dụng)` : 'Ban Tuyển dụng & Phát triển Nhân sự'
+  );
   const [customNotes, setCustomNotes] = useState('Vui lòng tham gia đúng giờ và chuẩn bị portfolio dự án gần nhất.');
   
   const [emailSubject, setEmailSubject] = useState(
@@ -93,6 +98,12 @@ Bộ phận Nhân sự & Tuyển dụng`;
   // Gửi thư mời phỏng vấn chuẩn mực và lưu lịch vào hệ thống
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (currentUser?.role === 'PENDING') {
+      alert(`Tài khoản (${currentUser.email}) hiện đang ở trạng thái 'Chờ Duyệt' trên Supabase. Vui lòng liên hệ Admin đổi ô role từ 'PENDING' thành 'RECRUITER' trên Supabase Dashboard để duyệt quyền gửi thư!`);
+      return;
+    }
+
     setIsSending(true);
     try {
       const payload: InterviewEmailPayload = {

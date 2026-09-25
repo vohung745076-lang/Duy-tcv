@@ -10,7 +10,7 @@ import { JobExportModal } from './components/jobs/JobExportModal';
 import { MonthlyCandidatesView } from './components/candidates/MonthlyCandidatesView';
 import { jobApi, candidateApi, evaluationApi } from './services/api';
 import type { Job, Candidate } from './types';
-import type { UserProfile } from './services/supabase';
+import { supabase, authService, type UserProfile } from './services/supabase';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly'>('jobs');
@@ -81,6 +81,27 @@ export function App() {
       void fetchCandidates(activeJob.id);
     }
   }, [activeJob, fetchCandidates]);
+
+  // Lắng nghe phiên đăng nhập Google Auth từ Supabase
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        authService.fetchOrCreateProfile(session.user).then((profile) => {
+          setCurrentUser(profile);
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        authService.fetchOrCreateProfile(session.user).then((profile) => {
+          setCurrentUser(profile);
+        });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Tự động đồng bộ đa người dùng (khi chuyển tab hoặc định kỳ 10 giây/lần)
   useEffect(() => {
@@ -217,7 +238,7 @@ export function App() {
         )}
 
         {activeTab === 'monthly' && (
-          <MonthlyCandidatesView />
+          <MonthlyCandidatesView currentUser={currentUser} />
         )}
       </main>
 
