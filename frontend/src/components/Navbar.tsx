@@ -110,8 +110,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           <button
-            onClick={onOpenCreateJob}
-            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1"
+            onClick={currentUser.role === 'PENDING' ? undefined : onOpenCreateJob}
+            disabled={currentUser.role === 'PENDING'}
+            className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 ${
+              currentUser.role === 'PENDING'
+                ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+            }`}
+            title={currentUser.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể tạo JD' : 'Tạo Vị trí tuyển dụng mới'}
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="hidden xs:inline sm:inline">Tạo JD</span>
@@ -119,8 +125,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {activeJob && (
             <button
-              onClick={onOpenUpload}
-              className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 transition-all flex items-center gap-1.5"
+              onClick={currentUser.role === 'PENDING' ? undefined : onOpenUpload}
+              disabled={currentUser.role === 'PENDING'}
+              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                currentUser.role === 'PENDING'
+                  ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-lg shadow-blue-500/25'
+              }`}
+              title={currentUser.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể nạp CV' : 'Nạp hồ sơ CV ứng viên'}
             >
               <Upload className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Nạp Hồ sơ</span>

@@ -186,13 +186,39 @@ export function App() {
         activeJob={activeJob}
         currentUser={currentUser}
         onOpenAuth={() => setAuthModalOpen(true)}
-        onOpenCreateJob={() => setCreateJobOpen(true)}
-        onOpenUpload={() => setUploadOpen(true)}
+        onOpenCreateJob={() => {
+          if (currentUser.role === 'PENDING') {
+            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+            return;
+          }
+          setCreateJobOpen(true);
+        }}
+        onOpenUpload={() => {
+          if (currentUser.role === 'PENDING') {
+            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp hồ sơ.');
+            return;
+          }
+          setUploadOpen(true);
+        }}
         onRefresh={handleRefreshAll}
         isRefreshing={isRefreshing}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
+
+      {/* Warning Banner khi tài khoản Chờ duyệt */}
+      {currentUser.role === 'PENDING' && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-center text-xs text-amber-200 shadow-inner">
+          <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider text-[10px] border border-amber-500/40 shrink-0">
+              Chế độ chờ duyệt
+            </span>
+            <span className="text-amber-200">
+              Tài khoản <strong>{currentUser.full_name}</strong> đang ở trạng thái <strong>Chờ phê duyệt</strong>. Bạn có quyền xem dữ liệu, nhưng các chức năng <strong>Tạo JD, Nạp CV, Chấm lại điểm và Gửi Thư mời phỏng vấn</strong> tạm thời bị khóa cho đến khi Quản trị viên duyệt trên Supabase.
+            </span>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">
         {activeTab === 'jobs' && (
@@ -200,7 +226,13 @@ export function App() {
             jobs={jobs}
             activeJob={activeJob}
             onSelectJob={(job) => setActiveJob(job)}
-            onOpenCreateJob={() => setCreateJobOpen(true)}
+            onOpenCreateJob={() => {
+              if (currentUser.role === 'PENDING') {
+                alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+                return;
+              }
+              setCreateJobOpen(true);
+            }}
             onOpenExportJob={handleOpenExportJob}
             onDeleteJob={handleDeleteJob}
             candidates={candidates}
@@ -215,6 +247,7 @@ export function App() {
             candidate={selectedCandidate}
             activeJob={activeJob}
             candidates={candidates}
+            currentUser={currentUser}
             onSelectCandidate={(c) => setSelectedCandidate(c)}
             onEvaluationUpdated={() => {
               if (activeJob) fetchCandidates(activeJob.id);

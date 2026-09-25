@@ -15,11 +15,13 @@ import {
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
 import type { Candidate, Evaluation, Job } from '../types';
+import type { UserProfile } from '../services/supabase';
 
 interface SplitViewWorkspaceProps {
   candidate: Candidate;
   activeJob: Job;
   candidates: Candidate[];
+  currentUser?: UserProfile;
   onSelectCandidate: (candidate: Candidate) => void;
   onEvaluationUpdated: () => void;
 }
@@ -28,6 +30,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   candidate,
   activeJob,
   candidates,
+  currentUser,
   onSelectCandidate,
   onEvaluationUpdated,
 }) => {
@@ -60,6 +63,10 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   }, [fetchEvaluation]);
 
   const handleOpenOverride = () => {
+    if (currentUser?.role === 'PENDING') {
+      alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Chỉ HR chính thức mới có quyền điều chỉnh điểm số.');
+      return;
+    }
     if (evaluation) {
       setOverrideScore(evaluation.hr_override_score ?? evaluation.overall_score);
       setOverrideReason(evaluation.hr_override_reason || '');
@@ -241,7 +248,13 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                   {/* Override Action Button */}
                   <button
                     onClick={handleOpenOverride}
-                    className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-purple-500/20 flex items-center justify-center gap-1.5 transition-all self-start sm:self-auto"
+                    disabled={currentUser?.role === 'PENDING'}
+                    className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold shadow-lg flex items-center justify-center gap-1.5 transition-all self-start sm:self-auto ${
+                      currentUser?.role === 'PENDING'
+                        ? 'bg-slate-800/40 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-500/20'
+                    }`}
+                    title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể điều chỉnh điểm' : 'Điều chỉnh Điểm (Override)'}
                   >
                     <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Điều chỉnh Điểm (Override)
                   </button>

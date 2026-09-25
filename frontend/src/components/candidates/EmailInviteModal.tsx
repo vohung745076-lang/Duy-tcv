@@ -188,6 +188,14 @@ Bộ phận Nhân sự & Tuyển dụng`;
           </div>
         ) : (
           <form onSubmit={handleSend} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+            {currentUser?.role === 'PENDING' && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-200 flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold uppercase text-[10px] shrink-0">
+                  Chờ duyệt
+                </span>
+                <span>Tài khoản của bạn chưa được Admin cấp quyền chính thức. Nút gửi thư đã bị khóa để đảm bảo an toàn.</span>
+              </div>
+            )}
             {/* Candidate Name & Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -385,11 +393,16 @@ Bộ phận Nhân sự & Tuyển dụng`;
                 </button>
                 <button
                   type="submit"
-                  disabled={isSending}
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all disabled:opacity-50"
+                  disabled={isSending || currentUser?.role === 'PENDING'}
+                  className={`px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all ${
+                    currentUser?.role === 'PENDING'
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white shadow-cyan-500/25 disabled:opacity-50'
+                  }`}
+                  title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể gửi email' : 'Gửi Thư Mời Phỏng Vấn'}
                 >
                   <Send className="w-4 h-4" />
-                  <span>{isSending ? 'Đang gửi...' : 'Gửi Thư Mời Phỏng Vấn'}</span>
+                  <span>{isSending ? 'Đang gửi...' : currentUser?.role === 'PENDING' ? 'Chờ Admin duyệt để gửi thư' : 'Gửi Thư Mời Phỏng Vấn'}</span>
                 </button>
               </div>
             </div>
