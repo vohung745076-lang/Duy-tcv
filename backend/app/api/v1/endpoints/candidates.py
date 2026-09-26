@@ -122,9 +122,9 @@ async def upload_candidates(
 def list_candidates_by_job(
     job_id: str,
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """Lấy danh sách các ứng viên theo Job ID. Yêu cầu đăng nhập."""
+    """Lấy danh sách các ứng viên theo Job ID. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     candidates = db.query(Candidate).filter(Candidate.job_id == job_id).order_by(Candidate.created_at.asc()).all()
     for c in candidates:
         c.text_preview = c.masked_text[:200] if c.masked_text else ""
@@ -134,9 +134,9 @@ def list_candidates_by_job(
 def get_candidate_pdf(
     candidate_id: str,
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """Stream file PDF CV gốc từ đĩa local hoặc phục hồi từ bảng candidate_pdfs. Yêu cầu đăng nhập."""
+    """Stream file PDF CV gốc từ đĩa local hoặc phục hồi từ bảng candidate_pdfs. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")

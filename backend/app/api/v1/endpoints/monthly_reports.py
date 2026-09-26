@@ -34,7 +34,7 @@ def get_monthly_candidates(
     month: Optional[int] = None,
     year: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """
     Lấy danh sách ứng viên tổng hợp theo tháng/năm, kèm kết quả chấm điểm AI,

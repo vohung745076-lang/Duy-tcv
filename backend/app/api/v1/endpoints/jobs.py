@@ -33,18 +33,18 @@ def create_job(
 @router.get("", response_model=List[JobResponseSchema])
 def list_jobs(
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """Lấy danh sách các vị trí tuyển dụng. Yêu cầu đăng nhập."""
+    """Lấy danh sách các vị trí tuyển dụng. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     return db.query(JobDescription).order_by(JobDescription.created_at.desc()).all()
 
 @router.get("/{job_id}", response_model=JobResponseSchema)
 def get_job(
     job_id: str,
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """Chi tiết một vị trí tuyển dụng theo ID. Yêu cầu đăng nhập."""
+    """Chi tiết một vị trí tuyển dụng theo ID. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")

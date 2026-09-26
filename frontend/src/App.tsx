@@ -8,6 +8,7 @@ import { SplitViewWorkspace } from './components/SplitViewWorkspace';
 import { DashboardView } from './components/DashboardView';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthErrorBanner } from './components/auth/AuthErrorBanner';
+import { PendingApprovalGate } from './components/auth/PendingApprovalGate';
 import { JobExportModal } from './components/jobs/JobExportModal';
 import { MonthlyCandidatesView } from './components/candidates/MonthlyCandidatesView';
 import { jobApi, candidateApi, evaluationApi } from './services/api';
@@ -166,9 +167,9 @@ export function App() {
     };
   }, []);
 
-  // Chỉ gọi API tải dữ liệu sau khi đã xác thực người dùng thành công
+  // Chỉ gọi API tải dữ liệu sau khi tài khoản đã được phê duyệt (ADMIN hoặc RECRUITER)
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && currentUser.role !== 'PENDING') {
       void fetchJobs();
     } else {
       setJobs([]);
@@ -179,14 +180,14 @@ export function App() {
   }, [currentUser, fetchJobs]);
 
   useEffect(() => {
-    if (currentUser && activeJob) {
+    if (currentUser && currentUser.role !== 'PENDING' && activeJob) {
       void fetchCandidates(activeJob.id);
     }
   }, [currentUser, activeJob, fetchCandidates]);
 
-  // Tự động đồng bộ đa người dùng khi chuyển tab
+  // Tự động đồng bộ đa người dùng khi chuyển tab (chỉ chạy với tài khoản đã được duyệt)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.role === 'PENDING') return;
 
     const handleSync = () => {
       void fetchJobs();
@@ -213,6 +214,18 @@ export function App() {
       setActiveJob(null);
       setCandidates([]);
       setSelectedCandidate(null);
+    }
+  };
+
+  // Tra cứu lại trạng thái hồ sơ trực tiếp từ Supabase để tự động mở khóa khi Admin vừa duyệt
+  const handleRecheckProfile = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const profile = await authService.fetchOrCreateProfile(session.user);
+      setCurrentUser(profile);
+      if (profile.role !== 'PENDING') {
+        await fetchJobs();
+      }
     }
   };
 
@@ -336,21 +349,7 @@ export function App() {
         }}
       />
 
-      {/* Warning Banner khi tài khoản Chờ duyệt */}
-      {currentUser && currentUser.role === 'PENDING' && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-center text-xs text-amber-200">
-          <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider text-[10px] border border-amber-500/40 shrink-0">
-              Chế độ chờ duyệt
-            </span>
-            <span className="text-amber-200">
-              Tài khoản <strong>{currentUser.email}</strong> đang đợi Admin duyệt.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* MAIN VIEW - Gatekeeper nếu chưa đăng nhập */}
+      {/* MAIN VIEW - Gatekeeper nếu chưa đăng nhập hoặc chờ duyệt */}
       <main className="flex-1 flex flex-col">
         {!currentUser ? (
           <div className="flex-1 flex items-center justify-center p-4">
@@ -376,6 +375,12 @@ export function App() {
               </p>
             </div>
           </div>
+        ) : currentUser.role === 'PENDING' ? (
+          <PendingApprovalGate
+            currentUser={currentUser}
+            onRecheck={handleRecheckProfile}
+            onLogout={handleLogout}
+          />
         ) : (
           <>
             {activeTab === 'jobs' && (

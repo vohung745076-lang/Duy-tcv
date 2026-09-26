@@ -89,7 +89,7 @@ def run_evaluation(
 def get_evaluation_by_candidate(
     candidate_id: str,
     db: Session = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """Lấy dữ liệu đánh giá chi tiết cho màn hình Split-View Workspace. Yêu cầu đăng nhập."""
     evaluation = db.query(Evaluation).filter(Evaluation.candidate_id == candidate_id).first()
