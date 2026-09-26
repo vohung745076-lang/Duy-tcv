@@ -215,5 +215,24 @@ startxref
         self.assertTrue(len(manual_logs) > 0)
         print(f"[OK] Test 9 (Manual Highlight & Audit Trail): PASSED (Skill marked & Audit entry recorded)")
 
+    def test_10_pdf_stream_with_query_token_and_full_schema(self):
+        """Kiểm tra mở PDF qua ?token=... và kiểm tra schema trả về đầy đủ raw_text / masked_text."""
+        # 1. Kiểm tra mở file PDF qua query param ?token=
+        pdf_res = self.client.get(f"/api/v1/candidates/{self.__class__.candidate_id}/pdf?token=valid-test-token")
+        self.assertEqual(pdf_res.status_code, 200)
+        self.assertEqual(pdf_res.headers.get("content-type"), "application/pdf")
+        self.assertTrue(len(pdf_res.content) > 0)
+
+        # 2. Kiểm tra schema trả về masked_text / raw_text cho Đối Soát Trực Quan
+        cand_list_res = self.client.get(f"/api/v1/candidates/jobs/{self.__class__.job_id}")
+        self.assertEqual(cand_list_res.status_code, 200)
+        cands = cand_list_res.json()
+        self.assertTrue(len(cands) > 0)
+        target = cands[0]
+        self.assertIn("masked_text", target)
+        self.assertIn("raw_text", target)
+        self.assertTrue(target["masked_text"] is not None and len(target["masked_text"]) > 0)
+        print(f"[OK] Test 10 (PDF Stream with Query Token & Full Text Schema): PASSED")
+
 if __name__ == "__main__":
     unittest.main()

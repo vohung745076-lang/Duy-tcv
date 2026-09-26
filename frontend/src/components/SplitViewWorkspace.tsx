@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
 import type { Candidate, Evaluation, Job } from '../types';
-import type { UserProfile } from '../services/supabase';
+import { supabase, type UserProfile } from '../services/supabase';
 import { SmartCVViewer } from './cv-viewer/SmartCVViewer';
 import { AdditionalHighlightsSection } from './cv-viewer/AdditionalHighlightsSection';
 import { ManualHighlightModal } from './cv-viewer/ManualHighlightModal';
@@ -53,8 +53,17 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [manualHighlightOpen, setManualHighlightOpen] = useState(false);
   const [manualHighlightQuote, setManualHighlightQuote] = useState('');
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [authToken, setAuthToken] = useState<string>('');
 
-  const pdfUrl = candidateApi.getPdfUrl(candidate.id);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.access_token) {
+        setAuthToken(session.access_token);
+      }
+    });
+  }, []);
+
+  const pdfUrl = candidateApi.getPdfUrl(candidate.id, authToken);
 
   const fetchEvaluation = useCallback(async () => {
     setLoading(true);

@@ -30,18 +30,16 @@ def get_current_user(
     if not settings.ENABLE_BACKEND_AUTH:
         return AuthenticatedUser(id="test-admin-id", email="test@admin.local", role="ADMIN", full_name="Test Admin")
 
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Truy cập bị từ chối: Yêu cầu mã xác thực Bearer token trong Header Authorization.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1].strip()
+    elif "token" in request.query_params:
+        token = request.query_params.get("token", "").strip()
 
-    token = authorization.split(" ")[1].strip()
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Mã token rỗng.",
+            detail="Truy cập bị từ chối: Yêu cầu mã xác thực Bearer token trong Header Authorization hoặc tham số ?token=...",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

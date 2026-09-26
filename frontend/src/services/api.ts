@@ -79,8 +79,9 @@ export const candidateApi = {
     const response = await apiClient.get(`/candidates/jobs/${jobId}`);
     return response.data;
   },
-  getPdfUrl: (candidateId: string): string => {
-    return `${API_BASE_URL}/candidates/${candidateId}/pdf`;
+  getPdfUrl: (candidateId: string, token?: string): string => {
+    const base = `${API_BASE_URL}/candidates/${candidateId}/pdf`;
+    return token ? `${base}?token=${encodeURIComponent(token)}` : base;
   },
   delete: async (candidateId: string): Promise<{ message: string; deleted_id: string }> => {
     const response = await apiClient.delete(`/candidates/${candidateId}`);

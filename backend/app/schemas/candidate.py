@@ -11,6 +11,8 @@ class CandidateResponseSchema(BaseModel):
     status: str
     created_at: datetime
     text_preview: Optional[str] = None
+    masked_text: Optional[str] = None
+    raw_text: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     approval_status: Optional[str] = "PENDING"
