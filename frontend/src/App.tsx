@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ShieldCheck, LogIn } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { CreateJobModal } from './components/CreateJobModal';
 import { CandidateUploadModal } from './components/CandidateUploadModal';
@@ -19,13 +20,9 @@ export function App() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
-  // User Auth Profile State (Supabase RBAC)
-  const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'demo-hr-id',
-    email: 'hr@company.com',
-    full_name: 'Chuyên viên Tuyển dụng (HR)',
-    role: 'RECRUITER',
-  });
+  // User Auth Profile State (Supabase RBAC) - Không dùng tài khoản ảo
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   // Job Export State
@@ -61,6 +58,7 @@ export function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefreshAll = async () => {
+    if (!currentUser) return;
     setIsRefreshing(true);
     try {
       await fetchJobs();
@@ -72,23 +70,32 @@ export function App() {
     }
   };
 
+  // Lắng nghe phiên đăng nhập thực tế từ Supabase
   useEffect(() => {
-    void fetchJobs();
-  }, [fetchJobs]);
+    let isMounted = true;
 
-  useEffect(() => {
-    if (activeJob) {
-      void fetchCandidates(activeJob.id);
-    }
-  }, [activeJob, fetchCandidates]);
-
-  // Lắng nghe phiên đăng nhập Google Auth từ Supabase
-  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
       if (session?.user) {
         authService.fetchOrCreateProfile(session.user).then((profile) => {
-          setCurrentUser(profile);
+          if (isMounted) {
+            setCurrentUser(profile);
+            setIsAuthChecking(false);
+          }
+        }).catch(() => {
+          if (isMounted) {
+            setCurrentUser(null);
+            setIsAuthChecking(false);
+          }
         });
+      } else {
+        setCurrentUser(null);
+        setIsAuthChecking(false);
+      }
+    }).catch(() => {
+      if (isMounted) {
+        setCurrentUser(null);
+        setIsAuthChecking(false);
       }
     });
 
@@ -96,15 +103,53 @@ export function App() {
       if (session?.user) {
         authService.fetchOrCreateProfile(session.user).then((profile) => {
           setCurrentUser(profile);
+          setIsAuthChecking(false);
+        }).catch(() => {
+          setCurrentUser(null);
+          setIsAuthChecking(false);
         });
+      } else {
+        setCurrentUser(null);
+        setIsAuthChecking(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Lắng nghe sự kiện từ chối quyền hoặc token hết hạn (401)
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+      setAuthModalOpen(true);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
   }, []);
 
-  // Tự động đồng bộ đa người dùng (khi chuyển tab hoặc định kỳ 10 giây/lần)
+  // Chỉ gọi API tải dữ liệu sau khi đã xác thực người dùng thành công
   useEffect(() => {
+    if (currentUser) {
+      void fetchJobs();
+    } else {
+      setJobs([]);
+      setActiveJob(null);
+      setCandidates([]);
+      setSelectedCandidate(null);
+    }
+  }, [currentUser, fetchJobs]);
+
+  useEffect(() => {
+    if (currentUser && activeJob) {
+      void fetchCandidates(activeJob.id);
+    }
+  }, [currentUser, activeJob, fetchCandidates]);
+
+  // Tự động đồng bộ đa người dùng khi chuyển tab
+  useEffect(() => {
+    if (!currentUser) return;
+
     const handleSync = () => {
       void fetchJobs();
       if (activeJob) {
@@ -119,7 +164,19 @@ export function App() {
       window.removeEventListener('focus', handleSync);
       clearInterval(interval);
     };
-  }, [activeJob, fetchJobs, fetchCandidates]);
+  }, [currentUser, activeJob, fetchJobs, fetchCandidates]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setCurrentUser(null);
+      setJobs([]);
+      setActiveJob(null);
+      setCandidates([]);
+      setSelectedCandidate(null);
+    }
+  };
 
   const handleJobCreated = (newJob: Job) => {
     setJobs([newJob, ...jobs]);
@@ -142,51 +199,72 @@ export function App() {
     }
   };
 
-  const handleOpenExportJob = (job: Job) => {
-    setExportJob(job);
-    setExportModalOpen(true);
-  };
-
-  const handleCandidatesUploaded = (_newCandidates: Candidate[]) => {
+  const handleCandidatesUploaded = (newCandidates: Candidate[]) => {
+    setCandidates([...newCandidates, ...candidates]);
     if (activeJob) {
-      fetchCandidates(activeJob.id);
+      void fetchCandidates(activeJob.id);
     }
   };
 
-  const handleSelectCandidateToWorkspace = async (candidate: Candidate) => {
-    setSelectedCandidate(candidate);
+  const handleSelectCandidateToWorkspace = (c: Candidate) => {
+    setSelectedCandidate(c);
     setActiveTab('workspace');
   };
 
-  const handleSelectCandidateById = (candidateId: string) => {
-    const found = candidates.find((c) => c.id === candidateId);
+  const handleSelectCandidateById = (id: string) => {
+    const found = candidates.find((c) => c.id === id);
     if (found) {
       setSelectedCandidate(found);
       setActiveTab('workspace');
     }
   };
 
-  const handleRunAiEvaluation = async (candidateId: string) => {
-    setEvaluatingCandidateId(candidateId);
+  const handleRunAiEvaluation = async (candId: string) => {
+    setEvaluatingCandidateId(candId);
     try {
-      await evaluationApi.process(candidateId);
+      await evaluationApi.process(candId);
       if (activeJob) {
-        fetchCandidates(activeJob.id);
+        await fetchCandidates(activeJob.id);
       }
-    } catch {
-      alert('Không thể hoàn tất phân tích AI.');
+    } catch (err: any) {
+      console.error('Lỗi khi chấm điểm CV bằng AI:', err);
+      const detail = err?.response?.data?.detail || 'Lỗi khi kích hoạt AI chấm điểm CV.';
+      alert(detail);
     } finally {
       setEvaluatingCandidateId(null);
     }
   };
 
+  const handleOpenExportJob = (job: Job) => {
+    setExportJob(job);
+    setExportModalOpen(true);
+  };
+
+  // Màn hình chờ kiểm tra phiên làm việc ban đầu
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 gap-4">
+        <div className="w-10 h-10 border-4 border-blue-500/20 border-t-cyan-400 rounded-full animate-spin" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Đang khởi tạo phiên làm việc bảo mật...
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-950 flex flex-col font-['Be_Vietnam_Pro',sans-serif]">
+      {/* Top Navbar */}
       <Navbar
         activeJob={activeJob}
         currentUser={currentUser}
         onOpenAuth={() => setAuthModalOpen(true)}
+        onLogout={handleLogout}
         onOpenCreateJob={() => {
+          if (!currentUser) {
+            setAuthModalOpen(true);
+            return;
+          }
           if (currentUser.role === 'PENDING') {
             alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
             return;
@@ -194,8 +272,12 @@ export function App() {
           setCreateJobOpen(true);
         }}
         onOpenUpload={() => {
+          if (!currentUser) {
+            setAuthModalOpen(true);
+            return;
+          }
           if (currentUser.role === 'PENDING') {
-            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp hồ sơ.');
+            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp CV.');
             return;
           }
           setUploadOpen(true);
@@ -207,7 +289,7 @@ export function App() {
       />
 
       {/* Warning Banner khi tài khoản Chờ duyệt */}
-      {currentUser.role === 'PENDING' && (
+      {currentUser && currentUser.role === 'PENDING' && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-center text-xs text-amber-200 shadow-inner">
           <div className="flex items-center gap-2 max-w-5xl mx-auto w-full">
             <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider text-[10px] border border-amber-500/40 shrink-0">
@@ -220,58 +302,87 @@ export function App() {
         </div>
       )}
 
-      <main className="flex-1">
-        {activeTab === 'jobs' && (
-          <JobsView
-            jobs={jobs}
-            activeJob={activeJob}
-            onSelectJob={(job) => setActiveJob(job)}
-            onOpenCreateJob={() => {
-              if (currentUser.role === 'PENDING') {
-                alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
-                return;
-              }
-              setCreateJobOpen(true);
-            }}
-            onOpenExportJob={handleOpenExportJob}
-            onDeleteJob={handleDeleteJob}
-            candidates={candidates}
-            onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
-            onRunAiEvaluation={handleRunAiEvaluation}
-            evaluatingCandidateId={evaluatingCandidateId}
-          />
-        )}
+      {/* MAIN VIEW - Gatekeeper nếu chưa đăng nhập */}
+      <main className="flex-1 flex flex-col">
+        {!currentUser ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 max-w-md w-full text-center shadow-2xl space-y-6">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/25">
+                <ShieldCheck className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-white">Hệ Thống Tuyển Dụng Nội Bộ</h2>
+                <p className="text-xs sm:text-sm text-slate-400 mt-2 leading-relaxed">
+                  Khu vực kiểm soát và đối soát hồ sơ ứng viên bảo mật. Vui lòng đăng nhập bằng tài khoản HR hoặc Quản trị viên để truy cập dữ liệu.
+                </p>
+              </div>
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Đăng Nhập Tài Khoản HR</span>
+              </button>
+              <p className="text-[11px] text-slate-500">
+                Chính sách bảo mật dữ liệu ứng viên & phân quyền RBAC theo quy định tuyển dụng
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'jobs' && (
+              <JobsView
+                jobs={jobs}
+                activeJob={activeJob}
+                onSelectJob={(job) => setActiveJob(job)}
+                onOpenCreateJob={() => {
+                  if (currentUser.role === 'PENDING') {
+                    alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+                    return;
+                  }
+                  setCreateJobOpen(true);
+                }}
+                onOpenExportJob={handleOpenExportJob}
+                onDeleteJob={handleDeleteJob}
+                candidates={candidates}
+                onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
+                onRunAiEvaluation={handleRunAiEvaluation}
+                evaluatingCandidateId={evaluatingCandidateId}
+              />
+            )}
 
-        {activeTab === 'workspace' && selectedCandidate && activeJob && (
-          <SplitViewWorkspace
-            candidate={selectedCandidate}
-            activeJob={activeJob}
-            candidates={candidates}
-            currentUser={currentUser}
-            onSelectCandidate={(c) => setSelectedCandidate(c)}
-            onEvaluationUpdated={() => {
-              if (activeJob) fetchCandidates(activeJob.id);
-            }}
-          />
-        )}
+            {activeTab === 'workspace' && selectedCandidate && activeJob && (
+              <SplitViewWorkspace
+                candidate={selectedCandidate}
+                activeJob={activeJob}
+                candidates={candidates}
+                currentUser={currentUser}
+                onSelectCandidate={(c) => setSelectedCandidate(c)}
+                onEvaluationUpdated={() => {
+                  if (activeJob) fetchCandidates(activeJob.id);
+                }}
+              />
+            )}
 
-        {activeTab === 'dashboard' && activeJob && (
-          <DashboardView
-            activeJob={activeJob}
-            onSelectCandidateToWorkspace={handleSelectCandidateById}
-          />
-        )}
+            {activeTab === 'dashboard' && activeJob && (
+              <DashboardView
+                activeJob={activeJob}
+                onSelectCandidateToWorkspace={handleSelectCandidateById}
+              />
+            )}
 
-        {activeTab === 'audit' && activeJob && (
-          <DashboardView
-            activeJob={activeJob}
-            onSelectCandidateToWorkspace={handleSelectCandidateById}
-            showAuditOnly={true}
-          />
-        )}
+            {activeTab === 'audit' && activeJob && (
+              <DashboardView
+                activeJob={activeJob}
+                onSelectCandidateToWorkspace={handleSelectCandidateById}
+                showAuditOnly={true}
+              />
+            )}
 
-        {activeTab === 'monthly' && (
-          <MonthlyCandidatesView currentUser={currentUser} />
+            {activeTab === 'monthly' && (
+              <MonthlyCandidatesView currentUser={currentUser} />
+            )}
+          </>
         )}
       </main>
 
@@ -279,7 +390,10 @@ export function App() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onAuthSuccess={(user) => setCurrentUser(user)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          setAuthModalOpen(false);
+        }}
       />
 
       {/* Job Multi-Platform Export Modal */}

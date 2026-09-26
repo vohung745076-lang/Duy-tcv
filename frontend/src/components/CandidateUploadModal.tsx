@@ -56,8 +56,15 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
       }
     } catch (err: any) {
       console.error('Lỗi tải file CV:', err);
-      const detail = err?.response?.data?.detail || 'Không thể tải lên file CV. Vui lòng kiểm tra lại file tài liệu của bạn!';
-      alert(detail);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      if (status === 401) {
+        alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn. Vui lòng đăng nhập lại tài khoản HR để nạp CV.');
+      } else if (status === 403) {
+        alert('Tài khoản của bạn chưa được cấp quyền (yêu cầu vai trò ADMIN hoặc RECRUITER).');
+      } else {
+        alert(detail || 'Không thể tải lên file CV. Vui lòng kiểm tra lại file tài liệu của bạn!');
+      }
     } finally {
       setIsUploading(false);
     }

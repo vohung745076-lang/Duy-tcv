@@ -65,8 +65,21 @@ export const CreateJobModal: React.FC<CreateJobModalProps> = ({ isOpen, onClose,
       });
       onCreated(createdJob);
       onClose();
-    } catch {
-      alert('Không thể tạo Vị trí tuyển dụng. Vui lòng kiểm tra kết nối Server.');
+    } catch (err: any) {
+      console.error('Lỗi khi tạo vị trí tuyển dụng:', err);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      if (status === 401) {
+        alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn. Vui lòng đăng nhập lại tài khoản HR để tạo vị trí.');
+      } else if (status === 403) {
+        alert('Tài khoản của bạn chưa được cấp quyền (yêu cầu vai trò ADMIN hoặc RECRUITER).');
+      } else if (detail) {
+        alert(`Lỗi: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
+      } else if (err?.code === 'ERR_NETWORK') {
+        alert('Không thể kết nối đến máy chủ Backend (Lỗi mạng hoặc máy chủ đang khởi động lại).');
+      } else {
+        alert('Không thể tạo Vị trí tuyển dụng. Vui lòng thử lại.');
+      }
     } finally {
       setIsSubmitting(false);
     }

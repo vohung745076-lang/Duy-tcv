@@ -1,12 +1,13 @@
 import React from 'react';
-import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3, Calendar, RefreshCw } from 'lucide-react';
+import { Bot, UserCheck, ShieldCheck, User, Plus, Upload, Briefcase, SplitSquareVertical, BarChart3, Calendar, RefreshCw, LogIn, LogOut } from 'lucide-react';
 import type { Job } from '../types';
 import type { UserProfile } from '../services/supabase';
 
 interface NavbarProps {
   activeJob: Job | null;
-  currentUser: UserProfile;
+  currentUser: UserProfile | null;
   onOpenAuth: () => void;
+  onLogout?: () => void;
   onOpenCreateJob: () => void;
   onOpenUpload: () => void;
   onRefresh?: () => void;
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeJob,
   currentUser,
   onOpenAuth,
+  onLogout,
   onOpenCreateJob,
   onOpenUpload,
   onRefresh,
@@ -53,48 +55,72 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* User Role & Action Area */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Supabase User & Role Switcher */}
-          <button
-            type="button"
-            onClick={onOpenAuth}
-            className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl sm:rounded-2xl transition-all cursor-pointer group text-left"
-            title="Nhấn để xem tài khoản Google hoặc đổi vai trò"
-          >
-            {currentUser.avatar_url ? (
-              <img
-                src={currentUser.avatar_url}
-                alt={currentUser.full_name}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl object-cover border border-cyan-500/40"
-              />
-            ) : (
-              <div
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs ${
-                  currentUser.role === 'ADMIN'
-                    ? 'bg-purple-600/30 border border-purple-500/40 text-purple-300'
-                    : currentUser.role === 'PENDING'
-                    ? 'bg-amber-600/30 border border-amber-500/40 text-amber-300'
-                    : 'bg-blue-600/30 border border-blue-500/40 text-blue-300'
-                }`}
+          {!currentUser ? (
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/25 transition-all cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Đăng nhập HR</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              <button
+                type="button"
+                onClick={onOpenAuth}
+                className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-xl sm:rounded-2xl transition-all cursor-pointer group text-left"
+                title="Nhấn để xem tài khoản Google hoặc đổi vai trò"
               >
-                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </div>
-            )}
-            <div className="hidden sm:block">
-              <span className="block text-[11px] font-bold text-white group-hover:text-cyan-300 transition-colors truncate max-w-[120px]">
-                {currentUser.full_name}
-              </span>
-              <span
-                className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full inline-block ${
-                  currentUser.role === 'ADMIN'
-                    ? 'text-purple-400 bg-purple-500/10'
-                    : currentUser.role === 'PENDING'
-                    ? 'text-amber-400 bg-amber-500/10'
-                    : 'text-blue-400 bg-blue-500/10'
-                }`}
-              >
-                {currentUser.role === 'ADMIN' ? 'Admin' : currentUser.role === 'PENDING' ? 'Chờ duyệt' : 'HR'}
-              </span>
+                {currentUser.avatar_url ? (
+                  <img
+                    src={currentUser.avatar_url}
+                    alt={currentUser.full_name}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl object-cover border border-cyan-500/40"
+                  />
+                ) : (
+                  <div
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs ${
+                      currentUser.role === 'ADMIN'
+                        ? 'bg-purple-600/30 border border-purple-500/40 text-purple-300'
+                        : currentUser.role === 'PENDING'
+                        ? 'bg-amber-600/30 border border-amber-500/40 text-amber-300'
+                        : 'bg-blue-600/30 border border-blue-500/40 text-blue-300'
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </div>
+                )}
+                <div className="hidden sm:block">
+                  <span className="block text-[11px] font-bold text-white group-hover:text-cyan-300 transition-colors truncate max-w-[120px]">
+                    {currentUser.full_name}
+                  </span>
+                  <span
+                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full inline-block ${
+                      currentUser.role === 'ADMIN'
+                        ? 'text-purple-400 bg-purple-500/10'
+                        : currentUser.role === 'PENDING'
+                        ? 'text-amber-400 bg-amber-500/10'
+                        : 'text-blue-400 bg-blue-500/10'
+                    }`}
+                  >
+                    {currentUser.role === 'ADMIN' ? 'Admin' : currentUser.role === 'PENDING' ? 'Chờ duyệt' : 'HR'}
+                  </span>
+                </div>
+              </button>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="p-1.5 sm:p-2 bg-slate-950/80 hover:bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-slate-700 rounded-xl transition-all cursor-pointer"
+                  title="Đăng xuất khỏi hệ thống"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          </button>
+          )}
 
           {onRefresh && (
             <button
@@ -110,14 +136,24 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           <button
-            onClick={currentUser.role === 'PENDING' ? undefined : onOpenCreateJob}
-            disabled={currentUser.role === 'PENDING'}
+            onClick={() => {
+              if (!currentUser) {
+                onOpenAuth();
+                return;
+              }
+              if (currentUser.role === 'PENDING') {
+                alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+                return;
+              }
+              onOpenCreateJob();
+            }}
+            disabled={currentUser?.role === 'PENDING'}
             className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 ${
-              currentUser.role === 'PENDING'
+              currentUser?.role === 'PENDING'
                 ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer'
             }`}
-            title={currentUser.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể tạo JD' : 'Tạo Vị trí tuyển dụng mới'}
+            title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể tạo JD' : 'Tạo Vị trí tuyển dụng mới'}
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="hidden xs:inline sm:inline">Tạo JD</span>
@@ -125,14 +161,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {activeJob && (
             <button
-              onClick={currentUser.role === 'PENDING' ? undefined : onOpenUpload}
-              disabled={currentUser.role === 'PENDING'}
-              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                currentUser.role === 'PENDING'
+              onClick={() => {
+                if (!currentUser) {
+                  onOpenAuth();
+                  return;
+                }
+                if (currentUser.role === 'PENDING') {
+                  alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp CV.');
+                  return;
+                }
+                onOpenUpload();
+              }}
+              disabled={currentUser?.role === 'PENDING'}
+              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                currentUser?.role === 'PENDING'
                   ? 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-60'
                   : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white shadow-lg shadow-blue-500/25'
               }`}
-              title={currentUser.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể nạp CV' : 'Nạp hồ sơ CV ứng viên'}
+              title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể nạp CV' : 'Nạp hồ sơ CV ứng viên'}
             >
               <Upload className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Nạp Hồ sơ</span>

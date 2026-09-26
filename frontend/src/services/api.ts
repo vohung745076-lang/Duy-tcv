@@ -30,8 +30,14 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       console.warn('Backend từ chối truy cập: Phiên đăng nhập hết hạn hoặc chưa xác thực (401 Unauthorized)');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
     } else if (error.response?.status === 403) {
       console.warn('Backend từ chối: Tài khoản chưa được cấp quyền (403 Forbidden)', error.response.data);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:forbidden', { detail: error.response.data }));
+      }
     }
     return Promise.reject(error);
   }
@@ -90,6 +96,9 @@ export const evaluationApi = {
   process: async (candidateId: string): Promise<Evaluation> => {
     const response = await apiClient.post(`/evaluations/process/${candidateId}`);
     return response.data;
+  },
+  evaluate: async (candidateId: string): Promise<Evaluation> => {
+    return evaluationApi.process(candidateId);
   },
   override: async (evaluationId: string, hr_override_score: number, hr_override_reason: string): Promise<Evaluation> => {
     const response = await apiClient.post(`/overrides/${evaluationId}`, {
