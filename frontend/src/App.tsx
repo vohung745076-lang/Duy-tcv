@@ -7,11 +7,13 @@ import { JobsView } from './components/JobsView';
 import { SplitViewWorkspace } from './components/SplitViewWorkspace';
 import { DashboardView } from './components/DashboardView';
 import { AuthModal } from './components/auth/AuthModal';
+import { AuthErrorBanner } from './components/auth/AuthErrorBanner';
 import { JobExportModal } from './components/jobs/JobExportModal';
 import { MonthlyCandidatesView } from './components/candidates/MonthlyCandidatesView';
 import { jobApi, candidateApi, evaluationApi } from './services/api';
 import type { Job, Candidate } from './types';
 import { supabase, authService, type UserProfile } from './services/supabase';
+import { parseOAuthCallback, translateOAuthError, cleanOAuthUrl } from './utils/oauthHandler';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly'>('jobs');
@@ -24,6 +26,7 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
 
   // Job Export State
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -70,27 +73,58 @@ export function App() {
     }
   };
 
-  // Lắng nghe phiên đăng nhập thực tế từ Supabase
+  // Lắng nghe phiên đăng nhập thực tế từ Supabase & Bóc tách kết quả OAuth Callback
   useEffect(() => {
     let isMounted = true;
 
+    // 1. Kiểm tra URL Callback từ Google OAuth
+    const callback = parseOAuthCallback();
+    if (callback.hasCallback) {
+      if (callback.error || callback.errorDescription) {
+        const errorText = translateOAuthError(callback.error, callback.errorDescription);
+        setAuthErrorMessage(errorText);
+        cleanOAuthUrl();
+        setIsAuthChecking(false);
+      } else if (callback.code) {
+        // Tự động hoàn tất trao đổi Auth Code lấy Session thật
+        supabase.auth.exchangeCodeForSession(callback.code).then(({ error }) => {
+          cleanOAuthUrl();
+          if (error) {
+            console.error('Lỗi khi hoàn tất xác thực Google:', error);
+            setAuthErrorMessage(translateOAuthError(error.message));
+            setIsAuthChecking(false);
+          }
+        }).catch((err) => {
+          cleanOAuthUrl();
+          console.error('Lỗi mạng khi xác thực code:', err);
+          setIsAuthChecking(false);
+        });
+      }
+    }
+
+    // 2. Lấy Session hiện tại
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isMounted) return;
       if (session?.user) {
         authService.fetchOrCreateProfile(session.user).then((profile) => {
           if (isMounted) {
             setCurrentUser(profile);
+            setAuthModalOpen(false);
+            setAuthErrorMessage(null);
             setIsAuthChecking(false);
           }
-        }).catch(() => {
+        }).catch((err) => {
+          console.error('Lỗi lấy profile:', err);
           if (isMounted) {
             setCurrentUser(null);
             setIsAuthChecking(false);
           }
         });
       } else {
-        setCurrentUser(null);
-        setIsAuthChecking(false);
+        if (!callback.code) {
+          setCurrentUser(null);
+          setIsAuthChecking(false);
+        }
       }
     }).catch(() => {
       if (isMounted) {
@@ -99,16 +133,20 @@ export function App() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 3. Lắng nghe thay đổi trạng thái đăng nhập
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         authService.fetchOrCreateProfile(session.user).then((profile) => {
           setCurrentUser(profile);
+          setAuthModalOpen(false); // Tự động đóng Modal khi đăng nhập Google thành công
+          setAuthErrorMessage(null);
           setIsAuthChecking(false);
-        }).catch(() => {
+        }).catch((err) => {
+          console.error('Lỗi nạp profile onAuthStateChange:', err);
           setCurrentUser(null);
           setIsAuthChecking(false);
         });
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setIsAuthChecking(false);
       }
@@ -288,6 +326,16 @@ export function App() {
         setActiveTab={setActiveTab}
       />
 
+      {/* Thông báo lỗi đăng nhập Google nếu có */}
+      <AuthErrorBanner
+        message={authErrorMessage || ''}
+        onDismiss={() => setAuthErrorMessage(null)}
+        onRetry={() => {
+          setAuthErrorMessage(null);
+          setAuthModalOpen(true);
+        }}
+      />
+
       {/* Warning Banner khi tài khoản Chờ duyệt */}
       {currentUser && currentUser.role === 'PENDING' && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-center text-xs text-amber-200 shadow-inner">
@@ -296,7 +344,7 @@ export function App() {
               Chế độ chờ duyệt
             </span>
             <span className="text-amber-200">
-              Tài khoản <strong>{currentUser.full_name}</strong> đang ở trạng thái <strong>Chờ phê duyệt</strong>. Bạn có quyền xem dữ liệu, nhưng các chức năng <strong>Tạo JD, Nạp CV, Chấm lại điểm và Gửi Thư mời phỏng vấn</strong> tạm thời bị khóa cho đến khi Quản trị viên duyệt trên Supabase.
+              Tài khoản <strong>{currentUser.full_name} ({currentUser.email})</strong> đang ở trạng thái <strong>Chờ phê duyệt</strong> từ Supabase. Bạn có quyền xem danh sách tuyển dụng, nhưng các chức năng <strong>Tạo JD, Nạp CV, Chấm lại điểm và Gửi Thư mời</strong> tạm thời bị khóa cho đến khi Quản trị viên cấp quyền trên Supabase.
             </span>
           </div>
         </div>

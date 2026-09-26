@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role user_role DEFAULT 'RECRUITER'::user_role NOT NULL,
+    role user_role DEFAULT 'PENDING'::user_role NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -153,6 +153,12 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+
 DROP POLICY IF EXISTS "Admins have full access to profiles" ON public.profiles;
 CREATE POLICY "Admins have full access to profiles" ON public.profiles FOR ALL TO authenticated 
 USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'ADMIN'));
@@ -177,25 +183,17 @@ DROP POLICY IF EXISTS "System and Authenticated users can insert audit logs" ON 
 CREATE POLICY "System and Authenticated users can insert audit logs" ON public.audit_logs FOR INSERT TO authenticated WITH CHECK (true);
 
 -- ==============================================================================================
--- PHẦN 3: TRIGGER TỰ ĐỘNG ĐỒNG BỘ USER TỪ AUTH.USERS SANG PROFILES
+-- PHẦN 3: TRIGGER TỰ ĐỘNG ĐỒNG BỘ USER TỪ AUTH.USERS SANG PROFILES (DỮ LIỆU THẬT 100%)
 -- ==============================================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
-DECLARE
-    assigned_role user_role;
 BEGIN
-    IF new.email = 'vohung745076@gmail.com' THEN
-        assigned_role := 'ADMIN'::user_role;
-    ELSE
-        assigned_role := 'PENDING'::user_role;
-    END IF;
-
     INSERT INTO public.profiles (id, email, full_name, role)
     VALUES (
         new.id,
         new.email,
         COALESCE(new.raw_user_meta_data->>'full_name', SPLIT_PART(new.email, '@', 1)),
-        assigned_role
+        'PENDING'::user_role
     )
     ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,

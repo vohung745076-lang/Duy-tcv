@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, ShieldCheck, Lock, Mail, User } from 'lucide-react';
 import { supabase, authService, type UserProfile } from '../../services/supabase';
 
@@ -20,6 +20,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [role, setRole] = useState<'ADMIN' | 'RECRUITER'>('RECRUITER');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user && (event === 'SIGNED_IN')) {
+        try {
+          const profile = await authService.fetchOrCreateProfile(session.user);
+          onAuthSuccess(profile);
+          onClose();
+        } catch (err) {
+          console.error('Lỗi nạp profile sau khi xác thực:', err);
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isOpen, onAuthSuccess, onClose]);
 
   if (!isOpen) return null;
 
