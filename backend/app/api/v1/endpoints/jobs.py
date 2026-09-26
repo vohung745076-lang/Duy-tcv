@@ -2,6 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.auth import get_current_user, require_role, AuthenticatedUser
 from app.models.job import JobDescription
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
@@ -11,8 +12,12 @@ from app.schemas.job import JobCreateSchema, JobResponseSchema
 router = APIRouter()
 
 @router.post("", response_model=JobResponseSchema, status_code=status.HTTP_201_CREATED)
-def create_job(job_in: JobCreateSchema, db: Session = Depends(get_db)):
-    """Tạo mới một vị trí tuyển dụng (JD) kèm bộ tiêu chuẩn chấm điểm."""
+def create_job(
+    job_in: JobCreateSchema,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """Tạo mới một vị trí tuyển dụng (JD) kèm bộ tiêu chuẩn chấm điểm. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     job = JobDescription(
         title=job_in.title,
         department=job_in.department,
@@ -26,21 +31,32 @@ def create_job(job_in: JobCreateSchema, db: Session = Depends(get_db)):
     return job
 
 @router.get("", response_model=List[JobResponseSchema])
-def list_jobs(db: Session = Depends(get_db)):
-    """Lấy danh sách các vị trí tuyển dụng."""
+def list_jobs(
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Lấy danh sách các vị trí tuyển dụng. Yêu cầu đăng nhập."""
     return db.query(JobDescription).order_by(JobDescription.created_at.desc()).all()
 
 @router.get("/{job_id}", response_model=JobResponseSchema)
-def get_job(job_id: str, db: Session = Depends(get_db)):
-    """Chi tiết một vị trí tuyển dụng theo ID."""
+def get_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Chi tiết một vị trí tuyển dụng theo ID. Yêu cầu đăng nhập."""
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")
     return job
 
 @router.delete("/{job_id}", status_code=status.HTTP_200_OK)
-def delete_job(job_id: str, db: Session = Depends(get_db)):
-    """Xóa vị trí tuyển dụng khỏi giao diện và bảo toàn 100% hồ sơ ứng viên."""
+def delete_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """Xóa vị trí tuyển dụng khỏi giao diện và bảo toàn 100% hồ sơ ứng viên. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")

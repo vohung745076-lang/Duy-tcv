@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.auth import get_current_user, require_role, AuthenticatedUser
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.job import JobDescription
@@ -32,7 +33,8 @@ class InterviewEmailRequest(BaseModel):
 def get_monthly_candidates(
     month: Optional[int] = None,
     year: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     Lấy danh sách ứng viên tổng hợp theo tháng/năm, kèm kết quả chấm điểm AI,
@@ -95,10 +97,11 @@ def get_monthly_candidates(
 def update_candidate_approval(
     candidate_id: str,
     payload: CandidateApprovalUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """
-    Cập nhật trạng thái phê duyệt của ứng viên:
+    Cập nhật trạng thái phê duyệt của ứng viên (Yêu cầu quyền ADMIN hoặc RECRUITER):
     - APPROVED: Đã duyệt
     - REJECTED: Đã loại (kèm lý do loại)
     """
@@ -127,11 +130,11 @@ def update_candidate_approval(
 def schedule_interview_only(
     candidate_id: str,
     payload: InterviewEmailRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """
-    Lưu thông tin lịch hẹn phỏng vấn vào hệ thống và phê duyệt ứng viên
-    (Dành cho trường hợp HR mở gửi trực tiếp qua Gmail 1-Click hoặc ứng dụng Mail).
+    Lưu thông tin lịch hẹn phỏng vấn vào hệ thống và phê duyệt ứng viên (Yêu cầu quyền ADMIN hoặc RECRUITER).
     """
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
@@ -166,10 +169,11 @@ def schedule_interview_only(
 def send_interview_email(
     candidate_id: str,
     payload: InterviewEmailRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """
-    Lưu thông tin phỏng vấn và kích hoạt gửi email tự động với báo cáo trạng thái chính xác.
+    Lưu thông tin phỏng vấn và kích hoạt gửi email tự động (Yêu cầu quyền ADMIN hoặc RECRUITER).
     """
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:

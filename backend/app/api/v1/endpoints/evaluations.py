@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.auth import get_current_user, require_role, AuthenticatedUser
 from app.models.job import JobDescription
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
@@ -11,8 +12,12 @@ from app.services.audit_service import audit_service
 router = APIRouter()
 
 @router.post("/process/{candidate_id}", response_model=EvaluationResponseSchema)
-def run_evaluation(candidate_id: str, db: Session = Depends(get_db)):
-    """Kích hoạt AI Pipeline để đánh giá đối soát CV với JD."""
+def run_evaluation(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """Kích hoạt AI Pipeline để đánh giá đối soát CV với JD. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ ứng viên.")
@@ -79,13 +84,17 @@ def run_evaluation(candidate_id: str, db: Session = Depends(get_db)):
     return evaluation
 
 @router.get("/candidate/{candidate_id}", response_model=EvaluationResponseSchema)
-def get_evaluation_by_candidate(candidate_id: str, db: Session = Depends(get_db)):
-    """Lấy dữ liệu đánh giá chi tiết cho màn hình Split-View Workspace."""
+def get_evaluation_by_candidate(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Lấy dữ liệu đánh giá chi tiết cho màn hình Split-View Workspace. Yêu cầu đăng nhập."""
     evaluation = db.query(Evaluation).filter(Evaluation.candidate_id == candidate_id).first()
     if not evaluation:
         # Nếu chưa có thì tự động run AI evaluation
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if not candidate:
             raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
-        return run_evaluation(candidate_id=candidate_id, db=db)
+        return run_evaluation(candidate_id=candidate_id, db=db, current_user=current_user)
     return evaluation

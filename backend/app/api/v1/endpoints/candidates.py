@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.auth import get_current_user, require_role, AuthenticatedUser
 from app.models.job import JobDescription
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
@@ -37,9 +38,10 @@ def resolve_candidate_file_path(file_path: str) -> str | None:
 async def upload_candidates(
     job_id: str,
     files: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """Tải lên nhiều file PDF CV, bóc tách text, che mờ PII và sao lưu PDF vào candidate_pdfs."""
+    """Tải lên nhiều file PDF CV, bóc tách text, che mờ PII và sao lưu PDF vào candidate_pdfs. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     try:
         # Kiểm tra xem Job có tồn tại không. Nếu không (hoặc đã bị xóa), lưu trực tiếp CV vào kho candidates
         job = db.query(JobDescription).filter(JobDescription.id == job_id).first() if job_id else None
@@ -117,16 +119,24 @@ async def upload_candidates(
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý nạp CV: {str(e)}")
 
 @router.get("/jobs/{job_id}", response_model=List[CandidateResponseSchema])
-def list_candidates_by_job(job_id: str, db: Session = Depends(get_db)):
-    """Lấy danh sách các ứng viên theo Job ID."""
+def list_candidates_by_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Lấy danh sách các ứng viên theo Job ID. Yêu cầu đăng nhập."""
     candidates = db.query(Candidate).filter(Candidate.job_id == job_id).order_by(Candidate.created_at.asc()).all()
     for c in candidates:
         c.text_preview = c.masked_text[:200] if c.masked_text else ""
     return candidates
 
 @router.get("/{candidate_id}/pdf")
-def get_candidate_pdf(candidate_id: str, db: Session = Depends(get_db)):
-    """Stream file PDF CV gốc từ đĩa local hoặc phục hồi từ bảng candidate_pdfs."""
+def get_candidate_pdf(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Stream file PDF CV gốc từ đĩa local hoặc phục hồi từ bảng candidate_pdfs. Yêu cầu đăng nhập."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
@@ -147,8 +157,12 @@ def get_candidate_pdf(candidate_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{candidate_id}", status_code=status.HTTP_200_OK)
-def delete_candidate(candidate_id: str, db: Session = Depends(get_db)):
-    """Xóa vĩnh viễn một hồ sơ ứng viên khỏi hệ thống (bao gồm file PDF và kết quả chấm điểm)."""
+def delete_candidate(
+    candidate_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """Xóa vĩnh viễn một hồ sơ ứng viên khỏi hệ thống. Yêu cầu quyền ADMIN hoặc RECRUITER."""
     candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")

@@ -131,12 +131,13 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs"
 )
 
-# Cấu hình CORS cho phép Frontend kết nối từ mọi nguồn (Vercel, Localhost, Mobile)
+# Cấu hình Whitelist CORS bảo mật theo chuẩn production (Khắc phục SEC-03)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

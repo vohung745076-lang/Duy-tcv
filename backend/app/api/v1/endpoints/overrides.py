@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.auth import require_role, AuthenticatedUser
 from app.models.evaluation import Evaluation
 from app.models.candidate import Candidate
 from app.schemas.evaluation import EvaluationOverrideSchema, EvaluationResponseSchema
@@ -12,9 +13,10 @@ router = APIRouter()
 def override_evaluation_score(
     evaluation_id: str,
     override_in: EvaluationOverrideSchema,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
-    """HR ghi đè (override) điểm số của AI kèm bắt buộc nhập lý do (Human-in-the-loop)."""
+    """HR ghi đè (override) điểm số của AI kèm bắt buộc nhập lý do (Human-in-the-loop). Yêu cầu quyền ADMIN hoặc RECRUITER."""
     evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
     if not evaluation:
         raise HTTPException(status_code=404, detail="Không tìm thấy kết quả đánh giá.")
@@ -35,12 +37,13 @@ def override_evaluation_score(
     db.commit()
     db.refresh(evaluation)
 
-    # Ghi log nhật ký kiểm toán bất biến
+    # Ghi log nhật ký kiểm toán bất biến với danh tính thật của HR
+    actor_id = current_user.email if current_user.email else current_user.id
     audit_service.log_action(
         db=db,
         action="HR_SCORE_OVERRIDE",
         evaluation_id=evaluation.id,
-        user_id="HR_RECRUITER",
+        user_id=actor_id,
         old_value={"score": old_score, "reason": old_reason},
         new_value={"score": override_in.hr_override_score, "reason": override_in.hr_override_reason},
         justification=override_in.hr_override_reason

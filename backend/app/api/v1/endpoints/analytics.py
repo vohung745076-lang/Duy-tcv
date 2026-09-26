@@ -2,6 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.auth import get_current_user, AuthenticatedUser
 from app.models.job import JobDescription
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
@@ -11,8 +12,12 @@ from app.schemas.audit import AuditLogResponseSchema
 router = APIRouter()
 
 @router.get("/jobs/{job_id}/ranking")
-def get_job_ranking(job_id: str, db: Session = Depends(get_db)):
-    """Lấy Bảng xếp hạng ứng viên theo Job ID, ưu tiên hr_override_score nếu có."""
+def get_job_ranking(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Lấy Bảng xếp hạng ứng viên theo Job ID, ưu tiên hr_override_score nếu có. Yêu cầu đăng nhập."""
     job = db.query(JobDescription).filter(JobDescription.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng.")
@@ -75,6 +80,9 @@ def get_job_ranking(job_id: str, db: Session = Depends(get_db)):
     }
 
 @router.get("/audit-logs", response_model=List[AuditLogResponseSchema])
-def list_audit_logs(db: Session = Depends(get_db)):
-    """Lấy danh sách nhật ký kiểm toán (Audit Trail)."""
+def list_audit_logs(
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Lấy danh sách nhật ký kiểm toán (Audit Trail). Yêu cầu đăng nhập."""
     return db.query(AuditLog).order_by(AuditLog.created_at.desc()).all()
