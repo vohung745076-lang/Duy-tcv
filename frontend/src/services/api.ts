@@ -98,6 +98,13 @@ export const evaluationApi = {
     });
     return response.data;
   },
+  addManualHighlight: async (
+    evaluationId: string,
+    data: { title: string; category: string; raw_quote: string; value_add_analysis?: string }
+  ): Promise<Evaluation> => {
+    const response = await apiClient.post(`/evaluations/${evaluationId}/manual-highlight`, data);
+    return response.data;
+  },
 };
 
 export const analyticsApi = {

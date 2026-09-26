@@ -1,3 +1,5 @@
+from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -98,3 +100,61 @@ def get_evaluation_by_candidate(
             raise HTTPException(status_code=404, detail="Không tìm thấy ứng viên.")
         return run_evaluation(candidate_id=candidate_id, db=db, current_user=current_user)
     return evaluation
+
+
+class ManualHighlightSchema(BaseModel):
+    title: str
+    category: str = "Kỹ năng chuyên môn"
+    raw_quote: str
+    value_add_analysis: Optional[str] = None
+
+
+@router.post("/{evaluation_id}/manual-highlight", response_model=EvaluationResponseSchema)
+def add_manual_highlight(
+    evaluation_id: str,
+    highlight_in: ManualHighlightSchema,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """HR trực tiếp ghi nhận một kỹ năng / thế mạnh bổ sung trên CV mà AI bỏ sót."""
+    evaluation = db.query(Evaluation).filter(Evaluation.id == evaluation_id).first()
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Không tìm thấy kết quả đánh giá.")
+
+    breakdown = dict(evaluation.breakdown) if evaluation.breakdown else {}
+    additional_highlights = list(breakdown.get("additional_highlights", []))
+
+    new_highlight = {
+        "title": highlight_in.title.strip(),
+        "category": highlight_in.category.strip(),
+        "raw_quote": highlight_in.raw_quote.strip(),
+        "value_add_analysis": highlight_in.value_add_analysis.strip() if highlight_in.value_add_analysis else f"Kỹ năng '{highlight_in.title}' do HR ghi nhận trực tiếp từ hồ sơ.",
+        "is_hr_added": True,
+        "added_by": current_user.email or current_user.id
+    }
+
+    # Tránh trùng lặp tiêu đề
+    existing_titles = [h.get("title", "").lower() for h in additional_highlights]
+    if new_highlight["title"].lower() in existing_titles:
+        additional_highlights = [h for h in additional_highlights if h.get("title", "").lower() != new_highlight["title"].lower()]
+
+    additional_highlights.append(new_highlight)
+    breakdown["additional_highlights"] = additional_highlights
+    evaluation.breakdown = breakdown
+
+    db.commit()
+    db.refresh(evaluation)
+
+    # Ghi log Audit Trail với danh tính thật của HR
+    actor_id = current_user.email if current_user.email else current_user.id
+    audit_service.log_action(
+        db=db,
+        action="HR_MANUAL_HIGHLIGHT_ADDED",
+        evaluation_id=evaluation.id,
+        user_id=actor_id,
+        new_value=new_highlight,
+        justification=f"HR trực tiếp ghi nhận kỹ năng '{highlight_in.title}' từ hồ sơ ứng viên."
+    )
+
+    return evaluation
+

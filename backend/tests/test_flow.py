@@ -191,5 +191,29 @@ startxref
         self.assertTrue(top_cand["is_overridden"])
         print(f"[OK] Test 8 (Leaderboard Ranking): PASSED (Final Score matches HR Override: {top_cand['final_score']}%)")
 
+    def test_09_manual_highlight_and_audit_trail(self):
+        """Kiểm tra tính năng HR ghi nhận kỹ năng thủ công trực tiếp từ CV."""
+        payload = {
+            "title": "Docker Containerization",
+            "category": "Kỹ năng chuyên môn",
+            "raw_quote": "3 years building microservices with Python, FastAPI and Docker",
+            "value_add_analysis": "Giúp triển khai hệ thống nhanh chóng và chuẩn hóa môi trường"
+        }
+        res = self.client.post(f"/api/v1/evaluations/{self.__class__.eval_id}/manual-highlight", json=payload)
+        self.assertEqual(res.status_code, 200)
+        updated_eval = res.json()
+        highlights = updated_eval["breakdown"]["additional_highlights"]
+        hr_item = next((h for h in highlights if h["title"] == "Docker Containerization"), None)
+        self.assertIsNotNone(hr_item)
+        self.assertTrue(hr_item.get("is_hr_added"))
+
+        # Kiểm tra Audit Log
+        audit_res = self.client.get("/api/v1/analytics/audit-logs")
+        self.assertEqual(audit_res.status_code, 200)
+        logs = audit_res.json()
+        manual_logs = [l for l in logs if l["action"] == "HR_MANUAL_HIGHLIGHT_ADDED"]
+        self.assertTrue(len(manual_logs) > 0)
+        print(f"[OK] Test 9 (Manual Highlight & Audit Trail): PASSED (Skill marked & Audit entry recorded)")
+
 if __name__ == "__main__":
     unittest.main()

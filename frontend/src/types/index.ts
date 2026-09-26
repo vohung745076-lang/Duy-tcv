@@ -85,6 +85,8 @@ export interface AdditionalHighlight {
   title: string;
   raw_quote: string;
   value_add_analysis: string;
+  is_hr_added?: boolean;
+  added_by?: string;
 }
 
 export interface EvaluationBreakdown {

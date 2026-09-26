@@ -36,6 +36,7 @@ export const AdditionalHighlightsSection: React.FC<AdditionalHighlightsSectionPr
       <div className="grid grid-cols-1 gap-2.5">
         {highlights.map((item, idx) => {
           const isSelected = activeQuote && (activeQuote === item.title || activeQuote === item.raw_quote);
+          const isHr = item.is_hr_added;
 
           return (
             <div
@@ -43,24 +44,41 @@ export const AdditionalHighlightsSection: React.FC<AdditionalHighlightsSectionPr
               onClick={() => onSelectHighlight && onSelectHighlight(item)}
               className={`p-3 rounded-xl border transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-cyan-950/60 border-cyan-400 ring-2 ring-cyan-500/30 shadow-lg shadow-cyan-500/10'
+                  ? isHr
+                    ? 'bg-purple-950/70 border-purple-400 ring-2 ring-purple-500/40 shadow-lg shadow-purple-500/20'
+                    : 'bg-cyan-950/60 border-cyan-400 ring-2 ring-cyan-500/30 shadow-lg shadow-cyan-500/10'
+                  : isHr
+                  ? 'bg-purple-950/20 border-purple-500/40 hover:border-purple-400/80 hover:bg-purple-950/30'
                   : 'bg-slate-850/90 border-cyan-500/30 hover:border-cyan-400/80 hover:bg-slate-800'
               }`}
             >
               <div className="flex items-start justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold shrink-0">
-                    <Award className="w-3.5 h-3.5" />
+                  <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isHr ? 'bg-purple-500/25 text-purple-300' : 'bg-cyan-500/20 text-cyan-300'
+                  }`}>
+                    {isHr ? <Sparkles className="w-3.5 h-3.5" /> : <Award className="w-3.5 h-3.5" />}
                   </span>
-                  <span className="font-bold text-white text-xs">{item.title}</span>
+                  <div>
+                    <span className="font-bold text-white text-xs block">{item.title}</span>
+                    {isHr && (
+                      <span className="text-[10px] text-purple-300 font-semibold">
+                        (HR ghi nhận{item.added_by ? `: ${item.added_by}` : ''})
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-semibold shrink-0">
+                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${
+                  isHr ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
+                }`}>
                   {item.category}
                 </span>
               </div>
 
               {item.raw_quote && (
-                <blockquote className="border-l-2 border-cyan-500 pl-2.5 my-1.5 text-[11px] text-slate-300 italic line-clamp-2">
+                <blockquote className={`border-l-2 pl-2.5 my-1.5 text-[11px] italic line-clamp-2 ${
+                  isHr ? 'border-purple-500 text-purple-200' : 'border-cyan-500 text-slate-300'
+                }`}>
                   "{item.raw_quote}"
                 </blockquote>
               )}

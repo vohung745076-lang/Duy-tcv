@@ -13,12 +13,15 @@ import {
   ChevronLeft,
   Lock,
   Eye,
+  Printer,
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
 import type { Candidate, Evaluation, Job } from '../types';
 import type { UserProfile } from '../services/supabase';
 import { SmartCVViewer } from './cv-viewer/SmartCVViewer';
 import { AdditionalHighlightsSection } from './cv-viewer/AdditionalHighlightsSection';
+import { ManualHighlightModal } from './cv-viewer/ManualHighlightModal';
+import { ExportAuditReportModal } from './cv-viewer/ExportAuditReportModal';
 
 interface SplitViewWorkspaceProps {
   candidate: Candidate;
@@ -47,6 +50,9 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [mobileTab, setMobileTab] = useState<'analysis' | 'pdf'>('analysis');
   const [leftPaneMode, setLeftPaneMode] = useState<'smart_audit' | 'raw_pdf'>('smart_audit');
   const [activeHighlightQuote, setActiveHighlightQuote] = useState<string | null>(null);
+  const [manualHighlightOpen, setManualHighlightOpen] = useState(false);
+  const [manualHighlightQuote, setManualHighlightQuote] = useState('');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const pdfUrl = candidateApi.getPdfUrl(candidate.id);
 
@@ -120,6 +126,23 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
     }
   };
 
+  const handleRequestAddHighlight = (quote: string) => {
+    setManualHighlightQuote(quote);
+    setManualHighlightOpen(true);
+  };
+
+  const handleSaveManualHighlight = async (data: {
+    title: string;
+    category: string;
+    raw_quote: string;
+    value_add_analysis?: string;
+  }) => {
+    if (!evaluation) return;
+    const updated = await evaluationApi.addManualHighlight(evaluation.id, data);
+    setEvaluation(updated);
+    onEvaluationUpdated();
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-105px)] sm:h-[calc(100vh-110px)] bg-slate-900 overflow-hidden w-full max-w-full">
       {/* Top Workspace Control Header */}
@@ -138,27 +161,40 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
           </span>
         </div>
 
-        {/* Candidate Selector Navigation */}
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs shrink-0">
+        {/* Actions & Candidate Navigation */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => prevCandidate && onSelectCandidate(prevCandidate)}
-            disabled={!prevCandidate}
-            className="p-1 sm:p-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-slate-200"
-            title="Ứng viên trước"
+            onClick={() => setExportModalOpen(true)}
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-blue-500/20 transition-all shrink-0 cursor-pointer"
+            title="Xuất biên bản đối soát định dạng A4 PDF phục vụ lưu trữ và phỏng vấn"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Xuất Báo Cáo Đối Soát (PDF)</span>
+            <span className="sm:hidden">Xuất PDF</span>
           </button>
-          <span className="text-slate-400 font-mono text-[11px] sm:text-xs px-1">
-            {currentIndex + 1} / {candidates.length}
-          </span>
-          <button
-            onClick={() => nextCandidate && onSelectCandidate(nextCandidate)}
-            disabled={!nextCandidate}
-            className="p-1 sm:p-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-slate-200"
-            title="Ứng viên kế tiếp"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+
+          {/* Candidate Selector Navigation */}
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs shrink-0">
+            <button
+              onClick={() => prevCandidate && onSelectCandidate(prevCandidate)}
+              disabled={!prevCandidate}
+              className="p-1 sm:p-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-slate-200"
+              title="Ứng viên trước"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-slate-400 font-mono text-[11px] sm:text-xs px-1">
+              {currentIndex + 1} / {candidates.length}
+            </span>
+            <button
+              onClick={() => nextCandidate && onSelectCandidate(nextCandidate)}
+              disabled={!nextCandidate}
+              className="p-1 sm:p-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-slate-200"
+              title="Ứng viên kế tiếp"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -244,6 +280,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                 activeHighlightQuote={activeHighlightQuote}
                 candidateName={candidate.masked_name}
                 onClearActiveHighlight={() => setActiveHighlightQuote(null)}
+                onRequestAddHighlight={handleRequestAddHighlight}
               />
             ) : (
               <iframe
@@ -621,6 +658,24 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
           </div>
         </div>
       )}
+
+      {/* Manual Highlight Modal (Khi HR bôi đen chữ trên CV và bấm "Ghi nhận kỹ năng") */}
+      <ManualHighlightModal
+        isOpen={manualHighlightOpen}
+        onClose={() => setManualHighlightOpen(false)}
+        rawQuote={manualHighlightQuote}
+        onSave={handleSaveManualHighlight}
+      />
+
+      {/* Export Audit Report Modal (Xuất Báo Cáo Đối Soát A4 / PDF) */}
+      <ExportAuditReportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        candidate={candidate}
+        job={activeJob}
+        evaluation={evaluation}
+        currentUser={currentUser}
+      />
     </div>
   );
 };
