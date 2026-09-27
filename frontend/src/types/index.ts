@@ -89,11 +89,19 @@ export interface AdditionalHighlight {
   added_by?: string;
 }
 
+export interface IndustryCertification {
+  category: string;
+  title: string;
+  raw_quote: string;
+  value_add_analysis: string;
+}
+
 export interface EvaluationBreakdown {
   skills: BreakdownCategory;
   experience: BreakdownCategory;
   education: BreakdownCategory;
   evidence?: EvidenceItem[];
+  industry_certifications?: IndustryCertification[];
   additional_highlights?: AdditionalHighlight[];
 }
 

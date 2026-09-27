@@ -16,9 +16,10 @@ import {
   Printer,
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
-import type { Candidate, Evaluation, Job } from '../types';
+import type { Candidate, Evaluation, Job, IndustryCertification } from '../types';
 import { supabase, type UserProfile } from '../services/supabase';
 import { SmartCVViewer } from './cv-viewer/SmartCVViewer';
+import { PDFInteractiveViewer } from './cv-viewer/PDFInteractiveViewer';
 import { AdditionalHighlightsSection } from './cv-viewer/AdditionalHighlightsSection';
 import { ManualHighlightModal } from './cv-viewer/ManualHighlightModal';
 import { ExportAuditReportModal } from './cv-viewer/ExportAuditReportModal';
@@ -48,7 +49,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [isSubmittingOverride, setIsSubmittingOverride] = useState(false);
   const [activeTab, setActiveTab] = useState<'evidence' | 'additional' | 'interview' | 'raw_text'>('evidence');
   const [mobileTab, setMobileTab] = useState<'analysis' | 'pdf'>('analysis');
-  const [leftPaneMode, setLeftPaneMode] = useState<'smart_audit' | 'raw_pdf'>('smart_audit');
+  const [leftPaneMode, setLeftPaneMode] = useState<'pdf_interactive' | 'smart_audit' | 'raw_pdf'>('pdf_interactive');
   const [activeHighlightQuote, setActiveHighlightQuote] = useState<string | null>(null);
   const [manualHighlightOpen, setManualHighlightOpen] = useState(false);
   const [manualHighlightQuote, setManualHighlightQuote] = useState('');
@@ -128,10 +129,22 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
 
   const additionalHighlights = evaluation?.breakdown?.additional_highlights || [];
 
+  // Trích xuất danh mục "Chứng chỉ của ngành" độc lập
+  const industryCertifications: IndustryCertification[] =
+    evaluation?.breakdown?.industry_certifications && evaluation.breakdown.industry_certifications.length > 0
+      ? evaluation.breakdown.industry_certifications
+      : (additionalHighlights.filter(
+          (h) =>
+            h.category.toLowerCase().includes('chứng chỉ') ||
+            h.title.toLowerCase().includes('analyst') ||
+            h.title.toLowerCase().includes('certificate') ||
+            h.title.toLowerCase().includes('associate')
+        ) as IndustryCertification[]);
+
   const handleSelectQuoteForAudit = (quote: string) => {
     setActiveHighlightQuote(quote);
-    if (leftPaneMode !== 'smart_audit') {
-      setLeftPaneMode('smart_audit');
+    if (leftPaneMode === 'raw_pdf') {
+      setLeftPaneMode('pdf_interactive');
     }
   };
 
@@ -245,16 +258,28 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
             {/* View Mode Switcher */}
             <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800">
               <button
-                onClick={() => setLeftPaneMode('smart_audit')}
+                onClick={() => setLeftPaneMode('pdf_interactive')}
                 className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-all ${
-                  leftPaneMode === 'smart_audit'
+                  leftPaneMode === 'pdf_interactive'
                     ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Bản đối soát thông minh: Khoanh vùng Xanh Lá cho tiêu chí khớp, Xanh Dương cho điểm nêu thêm"
+                title="Khoanh vùng màu trực tiếp trên tài liệu PDF gốc"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Khoanh Vùng PDF (AI)</span>
+              </button>
+              <button
+                onClick={() => setLeftPaneMode('smart_audit')}
+                className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  leftPaneMode === 'smart_audit'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Xem văn bản CV tách dòng"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Đối Soát Trực Quan</span>
+                <span>Văn Bản Tách Dòng</span>
               </button>
               <button
                 onClick={() => setLeftPaneMode('raw_pdf')}
@@ -263,7 +288,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                     ? 'bg-slate-700 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Xem bản file PDF gốc"
+                title="Xem bản file PDF gốc không khoanh vùng"
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span>PDF Gốc</span>
@@ -281,7 +306,17 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
           </div>
 
           <div className="flex-1 w-full h-full bg-slate-950 overflow-hidden">
-            {leftPaneMode === 'smart_audit' ? (
+            {leftPaneMode === 'pdf_interactive' ? (
+              <PDFInteractiveViewer
+                pdfUrl={pdfUrl}
+                matchedEvidences={allEvidences.filter((e) => e.matched)}
+                industryCertifications={industryCertifications}
+                additionalHighlights={additionalHighlights}
+                activeHighlightQuote={activeHighlightQuote}
+                candidateName={candidate.masked_name}
+                onSelectQuote={(q) => setActiveHighlightQuote(q)}
+              />
+            ) : leftPaneMode === 'smart_audit' ? (
               <SmartCVViewer
                 cvText={candidate.masked_text || candidate.raw_text || candidate.text_preview || ''}
                 matchedEvidences={allEvidences.filter((e) => e.matched)}
@@ -397,7 +432,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Award className="w-4 h-4 text-emerald-400" /> Bằng chứng đối soát ({allEvidences.length})
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Bảng Kiểm Định Nhanh ({skillEvidences.length + industryCertifications.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('additional')}
@@ -417,7 +452,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <HelpCircle className="w-4 h-4" /> Câu hỏi Phỏng vấn ({evaluation.interview_questions?.length || 0})
+                  <HelpCircle className="w-4 h-4" /> Phỏng Vấn ({evaluation.interview_questions?.length || 0})
                 </button>
                 <button
                   onClick={() => setActiveTab('raw_text')}
@@ -431,12 +466,12 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                 </button>
               </div>
 
-              {/* TAB 1: Evidence Citations */}
+              {/* TAB 1: BẢNG KIỂM ĐỊNH NHANH (EXECUTIVE SCREENING DASHBOARD) */}
               {activeTab === 'evidence' && (
                 <div className="space-y-4 text-xs">
-                  {/* AI Summary */}
+                  {/* AI Summary Banner */}
                   {evaluation.ai_summary && (
-                    <div className="bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5 space-y-1">
+                    <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl p-3.5 space-y-1.5 shadow-sm">
                       <span className="font-semibold text-blue-300 flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-blue-400" /> Nhận xét tổng quan của AI:
                       </span>
@@ -444,114 +479,226 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                     </div>
                   )}
 
-                  {/* Skills Match vs Missing */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3.5 space-y-2">
-                      <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle className="w-4 h-4" /> Tiêu chuẩn đáp ứng ({matchedSkills.length})
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {matchedSkills.length > 0 ? (
-                          matchedSkills.map((item, i) => (
-                            <span
-                              key={i}
-                              onClick={() => handleSelectQuoteForAudit(item.raw_quote || item.criterion)}
-                              className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 cursor-pointer rounded-lg text-[11px] transition-all flex items-center gap-1"
-                              title="Bấm để xem vùng khoanh xanh lá trên CV"
-                            >
-                              <span>✓</span> {item.criterion.replace('Kỹ năng bắt buộc: ', '')}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500 text-[11px] italic">Chưa xác định kỹ năng phù hợp</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-900/80 border border-rose-500/30 rounded-xl p-3.5 space-y-2">
-                      <span className="font-semibold text-rose-400 flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4" /> Tiêu chuẩn còn thiếu ({missingSkills.length})
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {missingSkills.length > 0 ? (
-                          missingSkills.map((item, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-lg text-[11px]">
-                              ✗ {item.criterion.replace('Kỹ năng bắt buộc: ', '')}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500 text-[11px] italic">Không phát hiện thiếu kỹ năng cốt lõi</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Highlights overview banner if any */}
-                  {additionalHighlights.length > 0 && (
-                    <div
-                      onClick={() => setActiveTab('additional')}
-                      className="p-3 bg-gradient-to-r from-cyan-950/50 to-slate-900 border border-cyan-500/30 hover:border-cyan-400 rounded-xl flex items-center justify-between cursor-pointer transition-all"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-cyan-400" />
-                        <span className="text-cyan-300 font-semibold text-xs">
-                          Phát hiện {additionalHighlights.length} điểm mạnh & kỹ năng nêu thêm ngoài JD
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-cyan-400 flex items-center gap-1 font-semibold">
-                        Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Raw Quotes / Evidence Citations */}
+                  {/* PHẦN 1: KỸ NĂNG CỐT LÕI BẮT BUỘC & ƯU TIÊN */}
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-slate-300 block">Trích dẫn bằng chứng từ CV (Evidence Citations):</span>
-                      <span className="text-[10px] text-slate-500">Bấm thẻ để định vị trên CV</span>
+                      <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                        1. Kỹ Năng Cốt Lõi Đối Soát ({matchedSkills.length}/{skillEvidences.length} Đạt)
+                      </span>
+                      <span className="text-[10px] text-slate-500">Bấm thẻ để định vị khoanh vùng trên PDF</span>
                     </div>
-                    {allEvidences.length > 0 ? (
-                      allEvidences.map((item: any, idx: number) => {
-                        const isSelected = activeHighlightQuote && (activeHighlightQuote === item.raw_quote || activeHighlightQuote === item.criterion);
+
+                    <div className="grid grid-cols-1 gap-2">
+                      {skillEvidences.map((item, idx) => {
+                        const isSelected = activeHighlightQuote && (
+                          activeHighlightQuote === item.raw_quote ||
+                          activeHighlightQuote === item.criterion ||
+                          (item.raw_quote && activeHighlightQuote.includes(item.raw_quote))
+                        );
 
                         return (
                           <div
                             key={idx}
                             onClick={() => handleSelectQuoteForAudit(item.raw_quote || item.criterion)}
-                            className={`p-3 space-y-1 rounded-xl border transition-all cursor-pointer ${
+                            className={`p-3 rounded-xl border transition-all cursor-pointer ${
                               isSelected
-                                ? 'bg-emerald-950/50 border-emerald-400 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                                ? 'bg-emerald-950/60 border-emerald-400 ring-2 ring-emerald-500/40 shadow-lg'
                                 : item.matched
                                 ? 'bg-slate-850 hover:bg-slate-800 border-slate-700/80 hover:border-emerald-500/40'
-                                : 'bg-slate-850/60 border-slate-800'
+                                : 'bg-slate-900/60 border-rose-500/30'
                             }`}
                           >
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-bold text-white uppercase flex items-center gap-1.5">
+                            <div className="flex items-center justify-between text-[11px] mb-1">
+                              <span className="font-bold text-white flex items-center gap-1.5">
                                 <span className={`w-2 h-2 rounded-full ${item.matched ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                                 {item.criterion}
                               </span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                item.matched ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
-                              }`}>
-                                {item.matched ? `Đạt (${item.score ?? 100}%)` : 'Chưa đạt'}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  item.matched ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                }`}>
+                                  {item.matched ? '✓ Đạt (100%)' : '✗ Chưa tìm thấy'}
+                                </span>
+                                {item.matched && (
+                                  <span className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-0.5 font-medium">
+                                    <Eye className="w-3 h-3" /> Xem PDF
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            {item.raw_quote && (
-                              <blockquote className="border-l-2 border-emerald-500 pl-3 italic text-emerald-200 text-[11px] my-1">
+
+                            {item.raw_quote ? (
+                              <blockquote className="border-l-2 border-emerald-500 pl-3 italic text-emerald-200 text-[11px] my-1 bg-emerald-950/20 py-0.5 rounded-r">
                                 "{item.raw_quote}"
                               </blockquote>
-                            )}
-                            {item.explanation && (
-                              <p className="text-slate-400 text-[10px] pl-3">{item.explanation}</p>
-                            )}
+                            ) : null}
+
+                            <p className="text-slate-400 text-[11px] pl-3">
+                              {item.explanation || (item.matched ? 'Ứng viên có kỹ năng này trong hồ sơ.' : 'Không phát hiện trong nội dung văn bản CV.')}
+                            </p>
                           </div>
                         );
-                      })
+                      })}
+                    </div>
+                  </div>
+
+                  {/* PHẦN 2: CHỨNG CHỈ CỦA NGÀNH (INDUSTRY CERTIFICATIONS) */}
+                  <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-purple-300 flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-purple-400" />
+                        2. Chứng Chỉ Của Ngành ({industryCertifications.length} Chứng Chỉ)
+                      </span>
+                      <span className="text-[10px] text-purple-400/80 font-medium">Khoanh vùng màu Tím trên PDF</span>
+                    </div>
+
+                    {industryCertifications.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2">
+                        {industryCertifications.map((cert, idx) => {
+                          const isSelected = activeHighlightQuote && (
+                            activeHighlightQuote === cert.raw_quote ||
+                            activeHighlightQuote === cert.title ||
+                            (cert.raw_quote && activeHighlightQuote.includes(cert.raw_quote))
+                          );
+
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => handleSelectQuoteForAudit(cert.raw_quote || cert.title)}
+                              className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-purple-950/60 border-purple-400 ring-2 ring-purple-500/40 shadow-lg'
+                                  : 'bg-slate-850 hover:bg-slate-800 border-purple-500/30 hover:border-purple-400/60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-[11px] mb-1">
+                                <span className="font-bold text-purple-200 flex items-center gap-1.5">
+                                  <Award className="w-3.5 h-3.5 text-purple-400" />
+                                  {cert.title}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                    ✓ Đã xác thực
+                                  </span>
+                                  <span className="text-[10px] text-purple-300 hover:text-white flex items-center gap-0.5 font-medium">
+                                    <Eye className="w-3 h-3" /> Định vị PDF
+                                  </span>
+                                </div>
+                              </div>
+
+                              <blockquote className="border-l-2 border-purple-400 pl-3 italic text-purple-200 text-[11px] my-1 bg-purple-950/20 py-0.5 rounded-r">
+                                "{cert.raw_quote}"
+                              </blockquote>
+
+                              <p className="text-slate-400 text-[11px] pl-3 leading-relaxed">
+                                {cert.value_add_analysis}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
                     ) : (
-                      <p className="text-slate-500 text-xs italic">Không có trích dẫn chi tiết nào.</p>
+                      <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl text-slate-500 italic text-[11px]">
+                        Chưa phát hiện chứng chỉ chuyên môn quốc tế trong hồ sơ này.
+                      </div>
                     )}
                   </div>
+
+                  {/* PHẦN 3: ĐỐI SOÁT KINH NGHIỆM THỰC CHIẾN */}
+                  <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                    <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
+                      3. Kinh Nghiệm Thực Chiến ({evaluation.experience_score}%)
+                    </span>
+
+                    {(evaluation.breakdown?.experience?.evidence || []).map((exp, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectQuoteForAudit(exp.raw_quote || exp.criterion)}
+                        className="p-3 bg-slate-850 hover:bg-slate-800 border border-cyan-500/30 rounded-xl space-y-1 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-white">{exp.criterion}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                            {exp.matched ? '✓ Đạt tiêu chuẩn' : 'Cần đối chiếu'}
+                          </span>
+                        </div>
+                        {exp.raw_quote && (
+                          <blockquote className="border-l-2 border-cyan-400 pl-3 italic text-cyan-200 text-[11px] my-1 bg-cyan-950/20 py-0.5 rounded-r">
+                            "{exp.raw_quote}"
+                          </blockquote>
+                        )}
+                        <p className="text-slate-400 text-[11px] pl-3">{exp.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* PHẦN 4: THẨM ĐỊNH HỌC VẤN & BẰNG CẤP */}
+                  <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                    <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
+                      4. Trình Độ Học Vấn & Bằng Cấp ({evaluation.education_score}%)
+                    </span>
+
+                    {(evaluation.breakdown?.education?.evidence || []).map((edu, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectQuoteForAudit(edu.raw_quote || edu.criterion)}
+                        className="p-3 bg-slate-850 hover:bg-slate-800 border border-indigo-500/30 rounded-xl space-y-1 cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-white">{edu.criterion}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            {edu.matched ? '✓ Cử nhân đạt chuẩn' : 'Cần xác nhận'}
+                          </span>
+                        </div>
+                        {edu.raw_quote && (
+                          <blockquote className="border-l-2 border-indigo-400 pl-3 italic text-indigo-200 text-[11px] my-1 bg-indigo-950/20 py-0.5 rounded-r">
+                            "{edu.raw_quote}"
+                          </blockquote>
+                        )}
+                        <p className="text-slate-400 text-[11px] pl-3">{edu.explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* PHẦN 5: TIÊU CHUẨN CÒN THIẾU & GỢI Ý PHỎNG VẤN */}
+                  {missingSkills.length > 0 && (
+                    <div className="space-y-2.5 pt-2 border-t border-slate-800">
+                      <span className="font-bold text-rose-300 flex items-center gap-1.5">
+                        <XCircle className="w-4 h-4 text-rose-400" />
+                        5. Khoảng Trống Kỹ Năng & Câu Hỏi Phỏng Vấn Sâu ({missingSkills.length})
+                      </span>
+
+                      <div className="p-3 bg-rose-950/30 border border-rose-500/30 rounded-xl space-y-2.5">
+                        <p className="text-slate-300 text-[11px]">
+                          Các kỹ năng sau chưa được tìm thấy trong hồ sơ. HR nên phỏng vấn làm rõ:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {missingSkills.map((m, i) => (
+                            <span key={i} className="px-2.5 py-1 bg-rose-500/20 border border-rose-500/40 text-rose-200 rounded-lg text-[11px] font-semibold">
+                              ✗ {m.criterion.replace('Kỹ năng bắt buộc: ', '')}
+                            </span>
+                          ))}
+                        </div>
+
+                        {evaluation.interview_questions && evaluation.interview_questions.length > 0 && (
+                          <div className="pt-2 border-t border-rose-800/40 space-y-1.5">
+                            <span className="font-semibold text-rose-200 text-[11px] block">
+                              Gợi ý câu hỏi phỏng vấn chuẩn bị sẵn:
+                            </span>
+                            {evaluation.interview_questions.slice(0, 2).map((q, qi) => (
+                              <div key={qi} className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-[11px]">
+                                <p className="font-medium text-white mb-0.5">"{q.question}"</p>
+                                <p className="text-slate-400 text-[10px]">Mục đích: {q.reason_to_ask || q.purpose}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
