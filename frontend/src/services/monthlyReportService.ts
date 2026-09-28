@@ -26,12 +26,22 @@ export const monthlyReportService = {
     candidateId: string,
     approvalStatus: 'APPROVED' | 'REJECTED' | 'PENDING',
     rejectionReason?: string,
-    reviewedBy?: string
-  ): Promise<{ message: string; approval_status: string; rejection_reason?: string }> => {
+    reviewedBy?: string,
+    sendRejectionEmail?: boolean,
+    customEmailBody?: string
+  ): Promise<{
+    message: string;
+    approval_status: string;
+    rejection_reason?: string;
+    email_sent?: boolean;
+    email_message?: string;
+  }> => {
     const response = await apiClient.patch(`/monthly/candidates/${candidateId}/approval`, {
       approval_status: approvalStatus,
       rejection_reason: rejectionReason,
       reviewed_by: reviewedBy,
+      send_rejection_email: sendRejectionEmail,
+      custom_email_body: customEmailBody,
     });
     return response.data;
   },

@@ -225,5 +225,89 @@ class EmailService:
 
         return False, "Máy chủ đám mây (Render Free) chặn cổng SMTP (587/465). Bạn vui lòng dùng nút 'Mở Gmail gửi ngay (1-Click)' trên giao diện để gửi trực tiếp từ Gmail!"
 
+    def send_rejection_email(
+        self,
+        to_email: str,
+        candidate_name: str,
+        job_title: str,
+        rejection_reason: str,
+        sender_name: Optional[str] = "Ban Tuyển Dụng & Nhân Sự",
+        custom_body: Optional[str] = None
+    ) -> tuple[bool, str]:
+        """Gửi email HTML phản hồi từ chối và cảm ơn ứng viên qua Google Webhook / Brevo / SMTP."""
+        import requests
+        from app.services.email.rejection_template import render_rejection_email_html
+
+        subject = f"[Thư Cảm Ơn & Phản Hồi] - Vị trí {job_title} | {candidate_name}"
+        html_content = render_rejection_email_html(
+            candidate_name=candidate_name,
+            job_title=job_title,
+            rejection_reason=rejection_reason,
+            sender_name=sender_name or settings.SMTP_FROM_NAME,
+            company_name=settings.PROJECT_NAME,
+            custom_body=custom_body
+        )
+
+        # 1. Google Webhook HTTPS (Port 443)
+        if settings.EMAIL_WEBHOOK_URL:
+            try:
+                resp = requests.post(
+                    settings.EMAIL_WEBHOOK_URL,
+                    json={
+                        "to": to_email,
+                        "subject": subject,
+                        "body": custom_body or rejection_reason,
+                        "htmlBody": html_content
+                    },
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    logger.info(f"Đã gửi email từ chối qua Google Webhook tới {to_email}")
+                    return True, f"Đã gửi thư phản hồi từ chối thành công tới {to_email} qua Google Webhook!"
+            except Exception as e:
+                logger.error(f"Lỗi gửi email từ chối qua Google Webhook: {str(e)}")
+
+        # 2. Brevo API HTTPS (Port 443)
+        if settings.BREVO_API_KEY:
+            try:
+                headers = {
+                    "accept": "application/json",
+                    "api-key": settings.BREVO_API_KEY,
+                    "content-type": "application/json"
+                }
+                data = {
+                    "sender": {"name": sender_name or settings.SMTP_FROM_NAME, "email": settings.SMTP_USER},
+                    "to": [{"email": to_email, "name": candidate_name}],
+                    "subject": subject,
+                    "htmlContent": html_content
+                }
+                resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=data, timeout=10)
+                if resp.status_code in [200, 201, 202]:
+                    logger.info(f"Đã gửi email từ chối qua Brevo API tới {to_email}")
+                    return True, f"Đã gửi thư phản hồi thành công qua Brevo API tới {to_email}!"
+            except Exception as e:
+                logger.error(f"Lỗi gửi email từ chối qua Brevo API: {str(e)}")
+
+        # 3. SMTP trực tiếp
+        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{sender_name or settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+            try:
+                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=3) as server:
+                    server.starttls()
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
+                logger.info(f"Đã gửi email từ chối tới {to_email} qua SMTP.")
+                return True, f"Đã gửi thư phản hồi tới {to_email} thành công!"
+            except Exception as e:
+                logger.warning(f"SMTP trực tiếp không kết nối được: {str(e)}")
+
+        return False, "Máy chủ đám mây (Render Free) chặn cổng SMTP (587/465). Bạn vui lòng dùng nút 'Mở Gmail gửi ngay (1-Click)' trên giao diện để gửi trực tiếp từ Gmail!"
+
 email_service = EmailService()
+
 

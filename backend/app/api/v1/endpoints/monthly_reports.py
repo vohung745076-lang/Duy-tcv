@@ -17,6 +17,8 @@ class CandidateApprovalUpdate(BaseModel):
     approval_status: str  # "APPROVED" hoặc "REJECTED" hoặc "PENDING"
     rejection_reason: Optional[str] = None
     reviewed_by: Optional[str] = "Chuyên viên Tuyển dụng (HR)"
+    send_rejection_email: Optional[bool] = False
+    custom_email_body: Optional[str] = None
 
 class InterviewEmailRequest(BaseModel):
     candidate_email: str
@@ -118,12 +120,40 @@ def update_candidate_approval(
     db.commit()
     db.refresh(candidate)
 
+    email_sent = False
+    email_message = None
+
+    if payload.approval_status == "REJECTED" and payload.send_rejection_email and candidate.email:
+        job = db.query(JobDescription).filter(JobDescription.id == candidate.job_id).first()
+        job_title = job.title if job else "Vị trí Tuyển dụng"
+        rejection_reason = payload.rejection_reason or "Chưa đáp ứng đủ các tiêu chuẩn chuyên biệt của đợt tuyển dụng lần này."
+
+        email_sent, email_message = email_service.send_rejection_email(
+            to_email=candidate.email,
+            candidate_name=candidate.masked_name,
+            job_title=job_title,
+            rejection_reason=rejection_reason,
+            sender_name=payload.reviewed_by or "Ban Tuyển Dụng & Nhân Sự",
+            custom_body=payload.custom_email_body
+        )
+
+        from app.services.audit_service import audit_service
+        audit_service.log_action(
+            db=db,
+            action="SEND_REJECTION_EMAIL",
+            user_id=current_user.id if hasattr(current_user, 'id') else "HR_USER",
+            new_value={"candidate_id": candidate.id, "email": candidate.email, "email_sent": email_sent},
+            justification=f"Loại hồ sơ & gửi thư phản hồi: {rejection_reason}"
+        )
+
     return {
         "message": "Cập nhật trạng thái thành công.",
         "candidate_id": candidate.id,
         "approval_status": candidate.approval_status,
         "rejection_reason": candidate.rejection_reason,
-        "reviewed_by": candidate.reviewed_by
+        "reviewed_by": candidate.reviewed_by,
+        "email_sent": email_sent,
+        "email_message": email_message
     }
 
 @router.post("/candidates/{candidate_id}/schedule-interview")

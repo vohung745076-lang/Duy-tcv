@@ -6,7 +6,7 @@ import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
 import { candidateApi } from '../../services/api';
 import { EmailInviteModal } from './EmailInviteModal';
-import { ApprovalWorkflowModal } from './ApprovalWorkflowModal';
+import { RejectionEmailModal } from './RejectionEmailModal';
 import type { UserProfile } from '../../services/supabase';
 import { CandidateDetailDrawer } from './CandidateDetailDrawer';
 
@@ -434,10 +434,11 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
         />
       )}
 
-      {/* Reject Modal */}
+      {/* Reject & Feedback Email Modal */}
       {rejectCandidate && (
-        <ApprovalWorkflowModal
+        <RejectionEmailModal
           candidate={rejectCandidate}
+          currentUser={currentUser}
           onClose={() => setRejectCandidate(null)}
           onSuccess={handleUpdateSuccess}
         />
