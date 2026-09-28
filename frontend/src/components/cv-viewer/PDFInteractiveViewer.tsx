@@ -92,6 +92,24 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
     };
   }, [pdfUrl]);
 
+  const [isScannedDoc, setIsScannedDoc] = useState(false);
+  const ocrTextsByPageRef = useRef<Record<number, string>>({});
+
+  const handlePageOcrExtracted = useCallback(
+    (pageNum: number, text: string) => {
+      setIsScannedDoc(true);
+      ocrTextsByPageRef.current[pageNum] = text;
+      const combined = Object.keys(ocrTextsByPageRef.current)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((p) => ocrTextsByPageRef.current[Number(p)])
+        .join('\n\n');
+      if (onTextExtracted && combined.trim().length > 10) {
+        onTextExtracted(combined);
+      }
+    },
+    [onTextExtracted]
+  );
+
   // 1.1 Tự động bóc tách toàn bộ văn bản của tất cả các trang qua PDF.js để làm cầu nối đồng bộ với AI
   useEffect(() => {
     if (!pdfDoc) return;
@@ -100,13 +118,18 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
     const extractTextFromAllPages = async () => {
       try {
         const pagesText: string[] = [];
+        let totalItems = 0;
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           const page = await pdfDoc.getPage(i);
           const tc = await page.getTextContent();
+          totalItems += tc.items.length;
           const pText = (tc.items as any[]).map((it) => it.str || '').join(' ').trim();
           if (pText) {
             pagesText.push(`--- Page ${i} ---\n${pText}`);
           }
+        }
+        if (totalItems === 0) {
+          setIsScannedDoc(true);
         }
         const fullText = pagesText.join('\n\n').trim();
         if (!isCancelled && fullText && onTextExtracted) {
@@ -286,6 +309,13 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
             <span>Khoanh vùng AI: <strong>{totalBoxesCount}</strong> vị trí</span>
           </div>
 
+          {isScannedDoc && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold text-[11px] animate-pulse">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Chế độ: Ảnh Scan (Đã kích hoạt OCR tiếng Việt)</span>
+            </div>
+          )}
+
           {/* BỘ ĐIỀU HƯỚNG CHUYỂN TRANG ĐA TRANG (MULTI-PAGE CONTROLLER) */}
           {numPages > 1 && (
             <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
@@ -388,6 +418,7 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
                 activeHighlightQuote={activeHighlightQuote}
                 onSelectQuote={onSelectQuote}
                 onPageBoxesCalculated={handleBoxesCalculated}
+                onPageOcrExtracted={handlePageOcrExtracted}
               />
             );
           })}

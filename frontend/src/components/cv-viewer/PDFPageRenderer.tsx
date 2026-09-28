@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { CheckCircle2, Award, Sparkles } from 'lucide-react';
+import { ocrService } from '../../services/ocr/ocrService';
 
 export interface HighlightBox {
   id: string;
@@ -32,6 +33,7 @@ interface PDFPageRendererProps {
   activeHighlightQuote: string | null;
   onSelectQuote?: (quote: string) => void;
   onPageBoxesCalculated?: (pageNumber: number, boxes: HighlightBox[]) => void;
+  onPageOcrExtracted?: (pageNumber: number, text: string) => void;
 }
 
 export const PDFPageRenderer: React.FC<PDFPageRendererProps> = ({
@@ -44,12 +46,15 @@ export const PDFPageRenderer: React.FC<PDFPageRendererProps> = ({
   activeHighlightQuote,
   onSelectQuote,
   onPageBoxesCalculated,
+  onPageOcrExtracted,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [boxes, setBoxes] = useState<HighlightBox[]>([]);
   const [rendering, setRendering] = useState(true);
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [ocrProgressMsg, setOcrProgressMsg] = useState('');
 
   useEffect(() => {
     let isCancelled = false;
@@ -95,91 +100,170 @@ export const PDFPageRenderer: React.FC<PDFPageRendererProps> = ({
         if (isCancelled) return;
 
         const items = textContent.items as any[];
-        const pageFullText = items.map((it) => it.str).join(' ');
-        const pageFullTextLower = pageFullText.toLowerCase();
-
         const calculatedBoxes: HighlightBox[] = [];
 
-        for (const target of searchTargets) {
-          for (const kw of target.keywords) {
-            if (!kw || kw.length < 2) continue;
-            const kwLower = kw.toLowerCase().trim();
+        if (items.length > 0) {
+          const pageFullText = items.map((it) => it.str).join(' ');
+          const pageFullTextLower = pageFullText.toLowerCase();
 
-            if (pageFullTextLower.includes(kwLower)) {
-              let matchingItems = items.filter((it) => {
-                const strLower = (it.str || '').toLowerCase();
-                return strLower.includes(kwLower);
-              });
+          for (const target of searchTargets) {
+            for (const kw of target.keywords) {
+              if (!kw || kw.length < 2) continue;
+              const kwLower = kw.toLowerCase().trim();
 
-              // Nếu cụm từ trải dài qua nhiều item (do PDF.js tách chuỗi), tìm các item chứa từ khóa chính
-              if (matchingItems.length === 0) {
-                const words = kwLower.split(/\s+/).filter((w) => w.length > 1);
-                if (words.length > 0) {
-                  matchingItems = items.filter((it) => {
-                    const strLower = (it.str || '').toLowerCase();
-                    return words.some((w) => strLower.includes(w));
-                  });
-                }
-              }
-
-              if (matchingItems.length > 0) {
-                // Nhóm theo dòng (Y-axis) để hộp khoanh vùng gọn gàng bám đúng dòng chữ
-                const firstItem = matchingItems[0];
-                const [, firstVy] = viewport.convertToViewportPoint(firstItem.transform[4], firstItem.transform[5]);
-                const lineItems = matchingItems.filter((it) => {
-                  const [, vy] = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
-                  return Math.abs(vy - firstVy) < 22 * scale;
+              if (pageFullTextLower.includes(kwLower)) {
+                let matchingItems = items.filter((it) => {
+                  const strLower = (it.str || '').toLowerCase();
+                  return strLower.includes(kwLower);
                 });
 
-                let minX = Infinity;
-                let minY = Infinity;
-                let maxX = -Infinity;
-                let maxY = -Infinity;
-
-                for (const it of lineItems) {
-                  const tx = it.transform[4];
-                  const ty = it.transform[5];
-                  const [vx, vy] = viewport.convertToViewportPoint(tx, ty);
-                  const itWidth = (it.width || 40) * scale;
-                  const itHeight = (it.height || 14) * scale;
-
-                  minX = Math.min(minX, vx);
-                  maxX = Math.max(maxX, vx + itWidth);
-                  minY = Math.min(minY, vy - itHeight);
-                  maxY = Math.max(maxY, vy);
+                // Nếu cụm từ trải dài qua nhiều item (do PDF.js tách chuỗi), tìm các item chứa từ khóa chính
+                if (matchingItems.length === 0) {
+                  const words = kwLower.split(/\s+/).filter((w) => w.length > 1);
+                  if (words.length > 0) {
+                    matchingItems = items.filter((it) => {
+                      const strLower = (it.str || '').toLowerCase();
+                      return words.some((w) => strLower.includes(w));
+                    });
+                  }
                 }
 
-                const padX = 5;
-                const padY = 3;
-                const boxW = Math.max(maxX - minX + padX * 2, 35);
-                const boxH = Math.max(maxY - minY + padY * 2, 16);
-                const boxX = Math.max(minX - padX, 2);
-                const boxY = Math.max(minY - padY, 2);
-
-                const boxId = `box-p${pageNumber}-${target.type}-${target.title.replace(/\s+/g, '_')}`;
-
-                if (!calculatedBoxes.some((b) => b.title === target.title)) {
-                  calculatedBoxes.push({
-                    id: boxId,
-                    pageIndex: pageNumber,
-                    x: boxX,
-                    y: boxY,
-                    width: boxW,
-                    height: boxH,
-                    type: target.type,
-                    title: target.title,
-                    quote: target.quote,
-                    matchedText: kw,
+                if (matchingItems.length > 0) {
+                  // Nhóm theo dòng (Y-axis) để hộp khoanh vùng gọn gàng bám đúng dòng chữ
+                  const firstItem = matchingItems[0];
+                  const [, firstVy] = viewport.convertToViewportPoint(firstItem.transform[4], firstItem.transform[5]);
+                  const lineItems = matchingItems.filter((it) => {
+                    const [, vy] = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
+                    return Math.abs(vy - firstVy) < 22 * scale;
                   });
+
+                  let minX = Infinity;
+                  let minY = Infinity;
+                  let maxX = -Infinity;
+                  let maxY = -Infinity;
+
+                  for (const it of lineItems) {
+                    const tx = it.transform[4];
+                    const ty = it.transform[5];
+                    const [vx, vy] = viewport.convertToViewportPoint(tx, ty);
+                    const itWidth = (it.width || 40) * scale;
+                    const itHeight = (it.height || 14) * scale;
+
+                    minX = Math.min(minX, vx);
+                    maxX = Math.max(maxX, vx + itWidth);
+                    minY = Math.min(minY, vy - itHeight);
+                    maxY = Math.max(maxY, vy);
+                  }
+
+                  const padX = 5;
+                  const padY = 3;
+                  const boxW = Math.max(maxX - minX + padX * 2, 35);
+                  const boxH = Math.max(maxY - minY + padY * 2, 16);
+                  const boxX = Math.max(minX - padX, 2);
+                  const boxY = Math.max(minY - padY, 2);
+
+                  const boxId = `box-p${pageNumber}-${target.type}-${target.title.replace(/\s+/g, '_')}`;
+
+                  if (!calculatedBoxes.some((b) => b.title === target.title)) {
+                    calculatedBoxes.push({
+                      id: boxId,
+                      pageIndex: pageNumber,
+                      x: boxX,
+                      y: boxY,
+                      width: boxW,
+                      height: boxH,
+                      type: target.type,
+                      title: target.title,
+                      quote: target.quote,
+                      matchedText: kw,
+                    });
+                  }
+                  break; // Đã tìm thấy vị trí khớp cho tiêu chí này trên trang
                 }
-                break; // Đã tìm thấy vị trí khớp cho tiêu chí này trên trang
               }
             }
           }
-        }
 
-        setBoxes(calculatedBoxes);
-        onPageBoxesCalculated?.(pageNumber, calculatedBoxes);
+          setBoxes(calculatedBoxes);
+          onPageBoxesCalculated?.(pageNumber, calculatedBoxes);
+        } else if (canvasRef.current) {
+          // Trang là ảnh scan (không có text layer). Kích hoạt WebAssembly OCR tiếng Việt!
+          setIsOcrRunning(true);
+          setOcrProgressMsg('Đang nhận diện ký tự quang học (OCR tiếng Việt)...');
+          try {
+            const ocrRes = await ocrService.recognizeCanvas(canvasRef.current, (_pct, msg) => {
+              setOcrProgressMsg(msg);
+            });
+            if (isCancelled) return;
+
+            if (ocrRes.text && ocrRes.text.trim().length > 10) {
+              onPageOcrExtracted?.(pageNumber, ocrRes.text);
+            }
+
+            const ocrTextLower = ocrRes.text.toLowerCase();
+            for (const target of searchTargets) {
+              for (const kw of target.keywords) {
+                if (!kw || kw.length < 2) continue;
+                const kwLower = kw.toLowerCase().trim();
+
+                if (ocrTextLower.includes(kwLower)) {
+                  // Tìm các word trong kết quả OCR khớp với từ khóa
+                  const matchedWords = ocrRes.words.filter(
+                    (w) => w.text.toLowerCase().includes(kwLower) || kwLower.includes(w.text.toLowerCase())
+                  );
+
+                  if (matchedWords.length > 0) {
+                    let minX = Infinity;
+                    let minY = Infinity;
+                    let maxX = -Infinity;
+                    let maxY = -Infinity;
+
+                    for (const w of matchedWords) {
+                      minX = Math.min(minX, w.bbox.x0);
+                      minY = Math.min(minY, w.bbox.y0);
+                      maxX = Math.max(maxX, w.bbox.x1);
+                      maxY = Math.max(maxY, w.bbox.y1);
+                    }
+
+                    const padX = 6;
+                    const padY = 4;
+                    const boxW = Math.max(maxX - minX + padX * 2, 40);
+                    const boxH = Math.max(maxY - minY + padY * 2, 18);
+                    const boxX = Math.max(minX - padX, 2);
+                    const boxY = Math.max(minY - padY, 2);
+
+                    const boxId = `box-ocr-p${pageNumber}-${target.type}-${target.title.replace(/\s+/g, '_')}`;
+                    if (!calculatedBoxes.some((b) => b.title === target.title)) {
+                      calculatedBoxes.push({
+                        id: boxId,
+                        pageIndex: pageNumber,
+                        x: boxX,
+                        y: boxY,
+                        width: boxW,
+                        height: boxH,
+                        type: target.type,
+                        title: target.title,
+                        quote: target.quote,
+                        matchedText: kw,
+                      });
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+
+            setBoxes(calculatedBoxes);
+            onPageBoxesCalculated?.(pageNumber, calculatedBoxes);
+          } catch (ocrErr) {
+            console.error(`Lỗi OCR trang scan ${pageNumber}:`, ocrErr);
+          } finally {
+            if (!isCancelled) {
+              setIsOcrRunning(false);
+              setOcrProgressMsg('');
+            }
+          }
+        }
       } catch (err: any) {
         if (!isCancelled && err?.name !== 'RenderingCancelledException') {
           console.error(`Lỗi render trang ${pageNumber}:`, err);
@@ -221,6 +305,14 @@ export const PDFPageRenderer: React.FC<PDFPageRendererProps> = ({
       <div className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-md bg-slate-900/85 backdrop-blur-md text-[10px] text-slate-200 font-mono pointer-events-none border border-slate-700 shadow-md">
         Trang {pageNumber} / {numPages}
       </div>
+
+      {/* Thông báo tiến độ OCR tiếng Việt khi trang là ảnh scan */}
+      {isOcrRunning && (
+        <div className="absolute top-2 left-2 z-10 px-3 py-1.5 rounded-lg bg-amber-500/95 backdrop-blur-md text-[11px] text-slate-950 font-bold flex items-center gap-2 shadow-lg border border-amber-300 animate-pulse pointer-events-none">
+          <Sparkles className="w-3.5 h-3.5 animate-spin text-slate-950" />
+          <span>{ocrProgressMsg || 'Đang bóc tách OCR tiếng Việt...'}</span>
+        </div>
+      )}
 
       {/* Lớp Canvas vẽ nội dung PDF gốc */}
       <canvas ref={canvasRef} className="block pointer-events-none" />

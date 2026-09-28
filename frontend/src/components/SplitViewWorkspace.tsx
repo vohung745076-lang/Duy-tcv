@@ -84,8 +84,10 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   }, [candidate.id]);
 
   useEffect(() => {
+    lastAutoSyncedCandidateRef.current = null;
+    setClientExtractedText('');
     void fetchEvaluation();
-  }, [fetchEvaluation]);
+  }, [candidate.id, fetchEvaluation]);
 
   const handleClientTextExtracted = useCallback(
     async (text: string) => {
