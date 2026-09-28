@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import {
   ZoomIn,
@@ -6,13 +6,14 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  Award,
-  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   AlertCircle,
   ExternalLink,
   RefreshCw,
 } from 'lucide-react';
 import type { EvidenceItem, AdditionalHighlight, IndustryCertification } from '../../types';
+import { PDFPageRenderer, type HighlightBox, type SearchTarget } from './PDFPageRenderer';
 
 // Cấu hình Worker cho PDF.js trong môi trường Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -30,27 +31,6 @@ interface PDFInteractiveViewerProps {
   onSelectQuote?: (quote: string) => void;
 }
 
-interface HighlightBox {
-  id: string;
-  pageIndex: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  type: 'skill' | 'cert' | 'exp' | 'edu';
-  title: string;
-  quote: string;
-  matchedText: string;
-}
-
-interface RenderedPage {
-  pageNumber: number;
-  width: number;
-  height: number;
-  scale: number;
-  boxes: HighlightBox[];
-}
-
 export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
   pdfUrl,
   matchedEvidences,
@@ -63,18 +43,18 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.25);
   const [showHighlights, setShowHighlights] = useState(true);
-  const [pagesData, setPagesData] = useState<RenderedPage[]>([]);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
-  const boxRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [boxesByPage, setBoxesByPage] = useState<{ [pageNum: number]: HighlightBox[] }>({});
 
   // 1. Tải tài liệu PDF bằng ArrayBuffer (Bảo mật & Không lỗi CORS)
   useEffect(() => {
     let isCancelled = false;
     setLoading(true);
     setError(null);
+    setCurrentPage(1);
 
     const loadPdf = async () => {
       try {
@@ -111,13 +91,8 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
   }, [pdfUrl]);
 
   // Chuẩn bị danh sách từ khóa và câu trích dẫn cần khoanh vùng
-  const searchTargets = React.useMemo(() => {
-    const targets: {
-      type: 'skill' | 'cert' | 'exp' | 'edu';
-      title: string;
-      quote: string;
-      keywords: string[];
-    }[] = [];
+  const searchTargets: SearchTarget[] = useMemo(() => {
+    const targets: SearchTarget[] = [];
 
     // Kỹ năng bắt buộc & ưu tiên đã đạt (🟢 Xanh lá)
     for (const ev of matchedEvidences) {
@@ -149,7 +124,7 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
     for (const hl of additionalHighlights) {
       if (!targets.some((t) => t.title.toLowerCase() === hl.title.toLowerCase())) {
         targets.push({
-          type: 'cert',
+          type: 'exp',
           title: hl.title,
           quote: hl.raw_quote || hl.title,
           keywords: [hl.title, hl.raw_quote].filter(Boolean),
@@ -160,164 +135,89 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
     return targets;
   }, [matchedEvidences, industryCertifications, additionalHighlights]);
 
-  // 2. Render từng trang PDF lên Canvas và tính toán tọa độ khoanh vùng
-  const renderAllPages = useCallback(async () => {
-    if (!pdfDoc) return;
+  const handleBoxesCalculated = useCallback((pageNum: number, boxes: HighlightBox[]) => {
+    setBoxesByPage((prev) => ({
+      ...prev,
+      [pageNum]: boxes,
+    }));
+  }, []);
 
-    const renderedPages: RenderedPage[] = [];
+  // Tổng số lượng vị trí khoanh vùng trên toàn bộ các trang
+  const totalBoxesCount = useMemo(() => {
+    return Object.values(boxesByPage).reduce((acc, boxes) => acc + boxes.length, 0);
+  }, [boxesByPage]);
 
-    for (let pIdx = 1; pIdx <= pdfDoc.numPages; pIdx++) {
-      const page = await pdfDoc.getPage(pIdx);
-      const viewport = page.getViewport({ scale });
-      const canvas = canvasRefs.current[pIdx - 1];
+  // Cuộn đến một trang cụ thể
+  const scrollToPage = useCallback((pageNum: number) => {
+    if (pageNum < 1 || pageNum > numPages) return;
+    setCurrentPage(pageNum);
+    const pageEl = document.getElementById(`pdf-page-${pageNum}`);
+    if (pageEl && containerRef.current) {
+      pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [numPages]);
 
-      if (canvas) {
-        const context = canvas.getContext('2d');
-        if (context) {
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+  // Theo dõi vị trí cuộn để cập nhật số trang hiện tại
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || numPages <= 1) return;
 
-          await page.render({
-            canvasContext: context,
-            viewport: viewport,
-            canvas: canvas,
-          } as any).promise;
-        }
-      }
+    const handleScroll = () => {
+      const pageElements = Array.from({ length: numPages }).map((_, i) =>
+        document.getElementById(`pdf-page-${i + 1}`)
+      );
 
-      // Trích xuất vị trí Text Layer để khoanh vùng
-      const textContent = await page.getTextContent();
-      const boxes: HighlightBox[] = [];
+      const containerTop = container.scrollTop;
+      let activeIndex = 0;
 
-      const items = textContent.items as any[];
-      // Gộp các text items thành chuỗi để tìm kiếm vị trí
-      const pageFullText = items.map((it) => it.str).join(' ');
-      const pageFullTextLower = pageFullText.toLowerCase();
-
-      for (const target of searchTargets) {
-        for (const kw of target.keywords) {
-          if (!kw || kw.length < 2) continue;
-          const kwLower = kw.toLowerCase().trim();
-
-          // Kiểm tra xem từ khóa có nằm trong trang này không
-          if (pageFullTextLower.includes(kwLower)) {
-            // Tìm các text items khớp với từ khóa
-            const matchingItems = items.filter((it) => {
-              const strLower = (it.str || '').toLowerCase();
-              return strLower.includes(kwLower);
-            });
-
-            if (matchingItems.length > 0) {
-              // Nhóm theo dòng (Y-axis) để hộp khoanh vùng gọn gàng, không bị bao trùm cả trang
-              const firstItem = matchingItems[0];
-              const [, firstVy] = viewport.convertToViewportPoint(firstItem.transform[4], firstItem.transform[5]);
-              const lineItems = matchingItems.filter((it) => {
-                const [, vy] = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
-                return Math.abs(vy - firstVy) < 20 * scale;
-              });
-
-              let minX = Infinity;
-              let minY = Infinity;
-              let maxX = -Infinity;
-              let maxY = -Infinity;
-
-              for (const it of lineItems) {
-                // Biến đổi tọa độ PDF sang tọa độ Canvas Viewport
-                const tx = it.transform[4];
-                const ty = it.transform[5];
-                const [vx, vy] = viewport.convertToViewportPoint(tx, ty);
-                const itWidth = (it.width || 40) * scale;
-                const itHeight = (it.height || 14) * scale;
-
-                minX = Math.min(minX, vx);
-                maxX = Math.max(maxX, vx + itWidth);
-                minY = Math.min(minY, vy - itHeight);
-                maxY = Math.max(maxY, vy);
-              }
-
-              // Mở rộng padding nhẹ để bao bọc đẹp mắt
-              const padX = 5;
-              const padY = 3;
-              const boxW = Math.max(maxX - minX + padX * 2, 35);
-              const boxH = Math.max(maxY - minY + padY * 2, 16);
-              const boxX = Math.max(minX - padX, 2);
-              const boxY = Math.max(minY - padY, 2);
-
-              const boxId = `box-${pIdx}-${target.type}-${target.title.replace(/\s+/g, '_')}`;
-
-              // Tránh trùng lặp hộp khoanh vùng trên cùng 1 trang
-              if (!boxes.some((b) => b.title === target.title)) {
-                boxes.push({
-                  id: boxId,
-                  pageIndex: pIdx,
-                  x: boxX,
-                  y: boxY,
-                  width: boxW,
-                  height: boxH,
-                  type: target.type,
-                  title: target.title,
-                  quote: target.quote,
-                  matchedText: kw,
-                });
-              }
-              break; // Đã tìm thấy vị trí khớp cho tiêu chí này
-            }
+      for (let i = 0; i < pageElements.length; i++) {
+        const el = pageElements[i];
+        if (el) {
+          const elTop = el.offsetTop - container.offsetTop;
+          if (containerTop >= elTop - 150) {
+            activeIndex = i;
           }
         }
       }
 
-      renderedPages.push({
-        pageNumber: pIdx,
-        width: viewport.width,
-        height: viewport.height,
-        scale,
-        boxes,
-      });
-    }
+      setCurrentPage(activeIndex + 1);
+    };
 
-    setPagesData(renderedPages);
-  }, [pdfDoc, scale, searchTargets]);
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [numPages]);
 
-  useEffect(() => {
-    void renderAllPages();
-  }, [renderAllPages]);
-
-  // 3. Tự động cuộn và nhấp nháy khi HR click tiêu chí bên bảng bên phải
+  // Tự động cuộn đến hộp highlight khi HR click bên bảng điều khiển AI
   useEffect(() => {
     if (!activeHighlightQuote) return;
 
     const activeQuoteLower = activeHighlightQuote.toLowerCase().trim();
 
-    // Tìm box phù hợp nhất
-    for (const page of pagesData) {
-      for (const box of page.boxes) {
-        if (
-          box.quote.toLowerCase().includes(activeQuoteLower) ||
-          activeQuoteLower.includes(box.quote.toLowerCase()) ||
-          box.title.toLowerCase().includes(activeQuoteLower) ||
-          activeQuoteLower.includes(box.title.toLowerCase())
-        ) {
-          const el = boxRefs.current[box.id];
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return;
-          }
-        }
+    for (const [pageNumStr, boxes] of Object.entries(boxesByPage)) {
+      const pageNum = parseInt(pageNumStr, 10);
+      const matchedBox = boxes.find(
+        (b) =>
+          b.quote.toLowerCase().includes(activeQuoteLower) ||
+          activeQuoteLower.includes(b.quote.toLowerCase()) ||
+          b.title.toLowerCase().includes(activeQuoteLower)
+      );
+
+      if (matchedBox) {
+        scrollToPage(pageNum);
+        break;
       }
     }
-  }, [activeHighlightQuote, pagesData]);
-
-  const totalBoxesCount = pagesData.reduce((acc, p) => acc + p.boxes.length, 0);
+  }, [activeHighlightQuote, boxesByPage, scrollToPage]);
 
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950 text-slate-400 gap-3 min-h-[400px]">
         <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
         <p className="text-xs font-semibold text-slate-300">
-          Đang dựng tài liệu PDF & định vị khoanh vùng trực tiếp...
+          Đang nạp và dựng toàn bộ các trang tài liệu PDF...
         </p>
         <span className="text-[11px] text-slate-500">
-          Phân tích tọa độ vector theo từng trang hồ sơ ứng viên
+          Phân tích đa trang độc lập & lớp văn bản Native TextLayer
         </span>
       </div>
     );
@@ -344,19 +244,44 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden relative font-['Be_Vietnam_Pro',sans-serif]">
       {/* TOOLBAR ĐIỀU KHIỂN TRÊN CÙNG */}
-      <div className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 z-20 shrink-0 text-xs">
-        {/* Thông tin số lượng khoanh vùng */}
+      <div className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 z-20 shrink-0 text-xs flex-wrap">
+        {/* Thông tin số lượng khoanh vùng & Chuyển Trang Đa Trang */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold text-[11px]">
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span>Khoanh vùng AI: <strong>{totalBoxesCount}</strong> vị trí</span>
           </div>
 
+          {/* BỘ ĐIỀU HƯỚNG CHUYỂN TRANG ĐA TRANG (MULTI-PAGE CONTROLLER) */}
+          {numPages > 1 && (
+            <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
+              <button
+                onClick={() => scrollToPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="p-1 rounded hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent"
+                title="Trang trước"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[11px] font-mono px-1.5 text-slate-200">
+                {currentPage} / {numPages}
+              </span>
+              <button
+                onClick={() => scrollToPage(currentPage + 1)}
+                disabled={currentPage >= numPages}
+                className="p-1 rounded hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent"
+                title="Trang sau"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400">
             <span className="inline-block w-2.5 h-2.5 rounded bg-emerald-500/60 border border-emerald-400" />
             <span>Kỹ năng Đạt</span>
             <span className="inline-block w-2.5 h-2.5 rounded bg-purple-500/60 border border-purple-400 ml-2" />
-            <span>Chứng chỉ của ngành</span>
+            <span>Chứng chỉ ngành</span>
           </div>
         </div>
 
@@ -405,107 +330,33 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
         </div>
       </div>
 
-      {/* KHUNG CUỘN CHỨA CÁC TRANG PDF */}
+      {/* KHUNG CUỘN CHỨA TẤT CẢ CÁC TRANG PDF (HIỂN THỊ ĐẦY ĐỦ CÁC TRANG VÀ CÓ THANH CUỘN RÕ RÀNG) */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto p-4 sm:p-6 flex flex-col items-center gap-6 bg-slate-950/90 no-scrollbar"
+        className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 flex flex-col items-center gap-6 bg-slate-950/90 scroll-smooth"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#475569 #0f172a',
+        }}
       >
-        {Array.from({ length: numPages }).map((_, index) => {
-          const pageNum = index + 1;
-          const pageData = pagesData.find((p) => p.pageNumber === pageNum);
-
-          return (
-            <div
-              key={`page-${pageNum}`}
-              className="relative shadow-2xl rounded-xl border border-slate-800 overflow-hidden bg-white shrink-0 group transition-all"
-              style={{
-                width: pageData ? pageData.width : undefined,
-                height: pageData ? pageData.height : undefined,
-              }}
-            >
-              {/* Thẻ đánh dấu số trang ở góc */}
-              <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-md bg-slate-900/80 backdrop-blur-md text-[10px] text-slate-300 font-mono pointer-events-none border border-slate-800">
-                Trang {pageNum} / {numPages}
-              </div>
-
-              {/* Lớp Canvas vẽ nội dung PDF gốc */}
-              <canvas
-                ref={(el) => {
-                  canvasRefs.current[index] = el;
-                }}
-                className="block pointer-events-none"
+        {pdfDoc &&
+          Array.from({ length: numPages }).map((_, index) => {
+            const pageNum = index + 1;
+            return (
+              <PDFPageRenderer
+                key={`page-renderer-${pageNum}`}
+                pdfDoc={pdfDoc}
+                pageNumber={pageNum}
+                numPages={numPages}
+                scale={scale}
+                showHighlights={showHighlights}
+                searchTargets={searchTargets}
+                activeHighlightQuote={activeHighlightQuote}
+                onSelectQuote={onSelectQuote}
+                onPageBoxesCalculated={handleBoxesCalculated}
               />
-
-              {/* LỚP PHỦ KHOANH VÙNG MÀU (HIGHLIGHT OVERLAY) */}
-              {showHighlights && pageData && (
-                <div className="absolute inset-0 pointer-events-none">
-                  {pageData.boxes.map((box) => {
-                    const isSkill = box.type === 'skill';
-                    const isCert = box.type === 'cert';
-                    const isActive =
-                      Boolean(activeHighlightQuote) &&
-                      (box.quote.toLowerCase().includes(activeHighlightQuote!.toLowerCase()) ||
-                        activeHighlightQuote!.toLowerCase().includes(box.quote.toLowerCase()) ||
-                        box.title.toLowerCase().includes(activeHighlightQuote!.toLowerCase()));
-
-                    return (
-                      <div
-                        key={box.id}
-                        ref={(el) => {
-                          boxRefs.current[box.id] = el;
-                        }}
-                        onClick={() => onSelectQuote?.(box.quote)}
-                        className={`absolute pointer-events-auto rounded cursor-pointer transition-all duration-300 group/box ${
-                          isSkill
-                            ? 'bg-emerald-500/25 border-2 border-emerald-400 hover:bg-emerald-500/40'
-                            : isCert
-                            ? 'bg-purple-500/25 border-2 border-purple-400 hover:bg-purple-500/40'
-                            : 'bg-cyan-500/20 border-2 border-cyan-400 hover:bg-cyan-500/35'
-                        } ${
-                          isActive
-                            ? 'ring-4 ring-amber-400/90 shadow-2xl shadow-amber-400/50 scale-[1.02] z-30 animate-pulse'
-                            : 'z-10'
-                        }`}
-                        style={{
-                          left: `${box.x}px`,
-                          top: `${box.y}px`,
-                          width: `${box.width}px`,
-                          height: `${box.height}px`,
-                        }}
-                      >
-                        {/* Huy hiệu mini nổi trên góc khung khoanh vùng */}
-                        <div
-                          className={`absolute -top-3.5 left-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold shadow-md whitespace-nowrap flex items-center gap-0.5 pointer-events-none ${
-                            isSkill
-                              ? 'bg-emerald-600 text-white'
-                              : isCert
-                              ? 'bg-purple-600 text-white'
-                              : 'bg-cyan-600 text-white'
-                          }`}
-                        >
-                          {isSkill ? (
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                          ) : (
-                            <Award className="w-2.5 h-2.5" />
-                          )}
-                          <span>{isCert ? 'Chứng chỉ' : 'Kỹ năng'}: {box.title}</span>
-                        </div>
-
-                        {/* Tooltip khi rê chuột */}
-                        <div className="opacity-0 group-hover/box:opacity-100 transition-opacity absolute bottom-full mb-1 left-0 z-40 p-2 bg-slate-900 border border-slate-700 text-slate-200 rounded-lg shadow-xl text-[11px] pointer-events-none max-w-xs whitespace-normal">
-                          <p className="font-bold text-white mb-0.5">
-                            {isCert ? 'Chứng chỉ của ngành' : 'Kỹ năng đáp ứng JD'}: {box.title}
-                          </p>
-                          <p className="text-[10px] text-slate-400 italic">"{box.quote}"</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
     </div>
   );

@@ -23,6 +23,10 @@ class PDFService:
                 text_blocks = [b for b in blocks if len(b) >= 5 and b[4].strip() and b[6] == 0]
 
                 if not text_blocks:
+                    # Thử lấy văn bản thô trực tiếp nếu không phân chia được blocks
+                    raw_page_text = page.get_text("text").strip()
+                    if raw_page_text:
+                        pages_text.append(f"--- Page {page_idx + 1} ---\n{raw_page_text}")
                     continue
 
                 page_width = page.rect.width
