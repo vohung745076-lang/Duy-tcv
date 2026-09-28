@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MailX, Send, CheckCircle2, RotateCcw, AlertCircle, ExternalLink } from 'lucide-react';
+import { X, MailX, RotateCcw, AlertCircle, ExternalLink } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
 import type { UserProfile } from '../../services/supabase';
@@ -72,8 +72,6 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
   );
 
   const [isSending, setIsSending] = useState(false);
-  const [sentSuccess, setSentSuccess] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
 
   const handleReasonSelect = (reason: string) => {
     setRejectionReason(reason);
@@ -84,8 +82,8 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
     setEmailBody(generateTemplate(candidateName, jobTitle, rejectionReason, senderName));
   };
 
-  // Gửi email từ chối tự động qua Backend
-  const handleSendEmailAndReject = async (e: React.FormEvent) => {
+  // Hành động duy nhất: Lưu trạng thái Loại vào Database và mở trực tiếp Gmail với nội dung điền sẵn 100%
+  const handleConfirmAndOpenGmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectionReason.trim()) {
       alert('Vui lòng chọn hoặc nhập lý do từ chối cụ thể!');
@@ -93,45 +91,8 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
     }
 
     setIsSending(true);
-    setStatusMessage('');
     try {
-      const res = await monthlyReportService.updateApprovalStatus(
-        candidate.id,
-        'REJECTED',
-        rejectionReason.trim(),
-        senderName,
-        true,
-        emailBody
-      );
-
-      setSentSuccess(true);
-      setStatusMessage(res.email_message || 'Đã lưu trạng thái Loại và gửi thư phản hồi tới ứng viên thành công!');
-
-      setTimeout(() => {
-        onSuccess({
-          ...candidate,
-          approval_status: 'REJECTED',
-          rejection_reason: rejectionReason.trim(),
-          reviewed_by: senderName,
-        });
-      }, 1800);
-    } catch (err: any) {
-      console.error('Lỗi khi gửi thư từ chối:', err);
-      alert('Không thể hoàn tất gửi thư: ' + (err?.response?.data?.detail || err?.message || 'Lỗi kết nối'));
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  // Chỉ loại nội bộ mà không gửi email
-  const handleRejectInternalOnly = async () => {
-    if (!rejectionReason.trim()) {
-      alert('Vui lòng chọn hoặc nhập lý do từ chối cụ thể!');
-      return;
-    }
-
-    setIsSending(true);
-    try {
+      // 1. Cập nhật trạng thái REJECTED trong cơ sở dữ liệu nội bộ
       await monthlyReportService.updateApprovalStatus(
         candidate.id,
         'REJECTED',
@@ -140,6 +101,18 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
         false
       );
 
+      // 2. Mở trực tiếp Gmail với email, tiêu đề và nội dung thư từ chối điền sẵn
+      const encodedTo = encodeURIComponent(candidateEmail);
+      const encodedSubject = encodeURIComponent(emailSubject);
+      const encodedBody = encodeURIComponent(emailBody);
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodedTo}&su=${encodedSubject}&body=${encodedBody}`;
+
+      const openedWindow = window.open(gmailUrl, '_blank');
+      if (!openedWindow || openedWindow.closed || typeof openedWindow.closed === 'undefined') {
+        window.location.href = `mailto:${encodedTo}?subject=${encodedSubject}&body=${encodedBody}`;
+      }
+
+      // 3. Cập nhật giao diện thành công và đóng modal
       onSuccess({
         ...candidate,
         approval_status: 'REJECTED',
@@ -148,19 +121,10 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
       });
     } catch (err: any) {
       console.error('Lỗi khi lưu loại hồ sơ:', err);
-      alert('Không thể lưu trạng thái loại: ' + (err?.message || 'Lỗi'));
+      alert('Không thể lưu trạng thái loại: ' + (err?.message || 'Lỗi kết nối'));
     } finally {
       setIsSending(false);
     }
-  };
-
-  // Mở Web Gmail trực tiếp (1-Click)
-  const handleOpenGmail = () => {
-    const encodedTo = encodeURIComponent(candidateEmail);
-    const encodedSubject = encodeURIComponent(emailSubject);
-    const encodedBody = encodeURIComponent(emailBody);
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodedTo}&su=${encodedSubject}&body=${encodedBody}`;
-    window.open(gmailUrl, '_blank');
   };
 
   return (
@@ -189,170 +153,146 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
-          {sentSuccess ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 animate-bounce">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h3 className="text-base font-bold text-white">Đã Gửi Thư Phản Hồi Thành Công!</h3>
-              <p className="text-xs text-slate-400 max-w-md">{statusMessage}</p>
-              <span className="text-[11px] text-slate-500 font-mono">Đang cập nhật trạng thái hồ sơ...</span>
-            </div>
-          ) : (
-            <form onSubmit={handleSendEmailAndReject} className="space-y-4">
-              {/* Thông tin ứng viên */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">Tên ứng viên:</label>
-                  <input
-                    type="text"
-                    value={candidateName}
-                    onChange={(e) => {
-                      setCandidateName(e.target.value);
-                      setEmailBody(generateTemplate(e.target.value, jobTitle, rejectionReason, senderName));
-                    }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">Email nhận thư:</label>
-                  <input
-                    type="email"
-                    required
-                    value={candidateEmail}
-                    onChange={(e) => setCandidateEmail(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
-                    placeholder="email@example.com"
-                  />
-                </div>
-              </div>
-
-              {/* Preset reasons */}
+          <form onSubmit={handleConfirmAndOpenGmail} className="space-y-4">
+            {/* Thông tin ứng viên */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
-                  Chọn nhanh lý do chưa phù hợp:
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESET_REASONS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => handleReasonSelect(preset)}
-                      className={`text-[11px] px-2.5 py-1 rounded-xl border text-left transition-all cursor-pointer ${
-                        rejectionReason === preset
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
-                          : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Tên ứng viên:</label>
+                <input
+                  type="text"
+                  value={candidateName}
+                  onChange={(e) => {
+                    setCandidateName(e.target.value);
+                    setEmailBody(generateTemplate(e.target.value, jobTitle, rejectionReason, senderName));
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
+                />
               </div>
-
-              {/* Chi tiết lý do */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Chi tiết lý do phản hồi (sẽ hiển thị trang trọng trong thư):
-                </label>
-                <textarea
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">Email nhận thư:</label>
+                <input
+                  type="email"
                   required
-                  rows={2}
-                  value={rejectionReason}
-                  onChange={(e) => {
-                    setRejectionReason(e.target.value);
-                    setEmailBody(generateTemplate(candidateName, jobTitle, e.target.value, senderName));
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-rose-500"
+                  value={candidateEmail}
+                  onChange={(e) => setCandidateEmail(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
+                  placeholder="email@example.com"
                 />
               </div>
+            </div>
 
-              {/* Tiêu đề Email */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Tiêu đề Email:
-                </label>
-                <input
-                  type="text"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              {/* Tiêu đề & Soạn thảo nội dung thư */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Nội dung thư gửi ứng viên (Có thể chỉnh sửa):
-                  </label>
+            {/* Preset reasons */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                Chọn nhanh lý do chưa phù hợp:
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESET_REASONS.map((preset) => (
                   <button
+                    key={preset}
                     type="button"
-                    onClick={handleResetTemplate}
-                    className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    onClick={() => handleReasonSelect(preset)}
+                    className={`text-[11px] px-2.5 py-1 rounded-xl border text-left transition-all cursor-pointer ${
+                      rejectionReason === preset
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
+                        : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:bg-slate-800/60'
+                    }`}
                   >
-                    <RotateCcw className="w-3 h-3" />
-                    Khôi phục mẫu chuẩn
+                    {preset}
                   </button>
-                </div>
-                <textarea
-                  rows={9}
-                  value={emailBody}
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 text-xs font-mono leading-relaxed focus:outline-none focus:border-cyan-500"
-                />
+                ))}
               </div>
+            </div>
 
-              {/* Người gửi */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Chữ ký người gửi:</label>
-                <input
-                  type="text"
-                  value={senderName}
-                  onChange={(e) => {
-                    setSenderName(e.target.value);
-                    setEmailBody(generateTemplate(candidateName, jobTitle, rejectionReason, e.target.value));
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-cyan-500"
-                />
-              </div>
+            {/* Chi tiết lý do */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Chi tiết lý do phản hồi (sẽ hiển thị trang trọng trong thư):
+              </label>
+              <textarea
+                required
+                rows={2}
+                value={rejectionReason}
+                onChange={(e) => {
+                  setRejectionReason(e.target.value);
+                  setEmailBody(generateTemplate(candidateName, jobTitle, e.target.value, senderName));
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-rose-500"
+              />
+            </div>
 
-              {/* Các nút hành động */}
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-slate-800">
+            {/* Tiêu đề Email */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Tiêu đề Email:
+              </label>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            {/* Soạn thảo nội dung thư */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Nội dung thư gửi ứng viên (Có thể chỉnh sửa):
+                </label>
                 <button
                   type="button"
-                  onClick={handleRejectInternalOnly}
-                  disabled={isSending}
-                  className="w-full sm:w-auto px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition-all cursor-pointer text-center"
-                  title="Chỉ lưu trạng thái Loại trong hệ thống mà không gửi email ra ngoài"
+                  onClick={handleResetTemplate}
+                  className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  Chỉ Loại Nội Bộ (Không Gửi Mail)
+                  <RotateCcw className="w-3 h-3" />
+                  Khôi phục mẫu chuẩn
                 </button>
-
-                <div className="w-full sm:w-auto flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handleOpenGmail}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                    title="Mở sẵn Gmail trên trình duyệt để gửi trực tiếp"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Mở Gmail gửi ngay (1-Click)</span>
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSending}
-                    className="px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/30 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{isSending ? 'Đang gửi...' : 'Xác nhận Loại & Gửi Thư'}</span>
-                  </button>
-                </div>
               </div>
-            </form>
-          )}
+              <textarea
+                rows={8}
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 text-xs font-mono leading-relaxed focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            {/* Người gửi */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">Chữ ký người gửi:</label>
+              <input
+                type="text"
+                value={senderName}
+                onChange={(e) => {
+                  setSenderName(e.target.value);
+                  setEmailBody(generateTemplate(candidateName, jobTitle, rejectionReason, e.target.value));
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            {/* Nút hành động duy nhất màu xanh */}
+            <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSending}
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                title="Mở sẵn Gmail trên trình duyệt để gửi trực tiếp và lưu trạng thái loại vào hệ thống"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>{isSending ? 'Đang xử lý...' : 'Mở Gmail gửi ngay (1-Click)'}</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

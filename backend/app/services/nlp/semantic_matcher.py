@@ -69,24 +69,61 @@ class SemanticMatcher:
 
     @classmethod
     def find_best_quote(cls, text: str, keyword: str) -> str:
-        """Tìm câu hoặc dòng văn bản sạch sẽ nhất chứa từ khóa."""
+        """Tìm câu hoặc đoạn trích dẫn súc tích, sạch sẽ nhất chứa từ khóa (tối ưu 40-160 ký tự)."""
         if not text or not keyword:
             return ""
 
         kw_clean = keyword.strip().lower()
-        lines = [line.strip() for line in text.split('\n') if len(line.strip()) > 3]
+        if kw_clean not in text.lower():
+            return ""
 
-        # 1. Tìm trong từng dòng độc lập
-        for line in lines:
-            if kw_clean in line.lower():
-                return line
+        # 1. Tách theo các ranh giới tự nhiên: xuống dòng, bullet, hoặc các cụm danh mục thường gặp
+        header_split = re.split(r'[\r\n•\*\+\t|]+', text)
+        segments = []
+        for seg in header_split:
+            s = seg.strip()
+            if not s:
+                continue
+            if len(s) > 160:
+                # Tách theo các nhãn thường gặp như 'Frameworks', 'Cơ sở dữ liệu', 'Kiến trúc', 'DevOps', 'HỌC VẤN', 'CHỨNG CHỈ', 'TÓM TẮT' hoặc chấm/phẩy
+                sub_parts = re.split(r'(?=(?:Frameworks|Cơ sở dữ liệu|Kiến trúc|DevOps|HỌC VẤN|CHỨNG CHỈ|TÓM TẮT|KINH NGHIỆM|DỰ ÁN|KỸ NĂNG|[.;]))', s)
+                for sp in sub_parts:
+                    sp_clean = sp.strip(' ;.')
+                    if len(sp_clean) > 3:
+                        segments.append(sp_clean)
+            else:
+                segments.append(s)
 
-        # 2. Tìm câu xung quanh từ khóa bằng regex
-        escaped_kw = re.escape(keyword.strip())
-        pattern = re.compile(rf'([^.\n]*?{escaped_kw}[^.\n]*)', re.IGNORECASE)
-        match = pattern.search(text)
-        if match:
-            return match.group(1).strip()
+        # 2. Tìm segment ngắn gọn chứa từ khóa
+        best_candidate = ""
+        for seg in segments:
+            if kw_clean in seg.lower():
+                cleaned = re.sub(r'^[-\s*•#]+', '', seg).strip(' ;.')
+                if len(cleaned) <= 160:
+                    return cleaned
+                elif not best_candidate or len(cleaned) < len(best_candidate):
+                    best_candidate = cleaned
+
+        if best_candidate:
+            kw_idx = best_candidate.lower().find(kw_clean)
+            if kw_idx != -1:
+                start = max(0, kw_idx - 40)
+                end = min(len(best_candidate), kw_idx + len(kw_clean) + 55)
+                snippet = best_candidate[start:end].strip(' ,;.')
+                if start > 0:
+                    snippet = "..." + snippet
+                if end < len(best_candidate):
+                    snippet = snippet + "..."
+                return snippet
+            return best_candidate[:150] + "..."
+
+        # 3. Fallback: Trích xuất cửa sổ quanh từ khóa
+        idx = text.lower().find(kw_clean)
+        if idx != -1:
+            start = max(0, idx - 40)
+            end = min(len(text), idx + len(kw_clean) + 55)
+            snippet = text[start:end].strip()
+            return re.sub(r'\s+', ' ', snippet)
 
         return ""
 

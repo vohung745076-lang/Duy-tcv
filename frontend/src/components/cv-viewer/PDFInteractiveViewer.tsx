@@ -122,8 +122,31 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           const page = await pdfDoc.getPage(i);
           const tc = await page.getTextContent();
-          totalItems += tc.items.length;
-          const pText = (tc.items as any[]).map((it) => it.str || '').join(' ').trim();
+          const items = tc.items as any[];
+          totalItems += items.length;
+
+          const pageLines: string[] = [];
+          let currentLine = '';
+          let lastY = -9999;
+
+          for (const it of items) {
+            const str = it.str || '';
+            const y = it.transform ? it.transform[5] : -9999;
+            const isNewLine = it.hasEOL || (lastY !== -9999 && Math.abs(y - lastY) > 5);
+
+            if (isNewLine && currentLine.trim()) {
+              pageLines.push(currentLine.trim());
+              currentLine = str;
+            } else {
+              currentLine += (currentLine ? ' ' : '') + str;
+            }
+            lastY = y;
+          }
+          if (currentLine.trim()) {
+            pageLines.push(currentLine.trim());
+          }
+
+          const pText = pageLines.join('\n').trim();
           if (pText) {
             pagesText.push(`--- Page ${i} ---\n${pText}`);
           }
