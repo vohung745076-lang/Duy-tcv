@@ -13,9 +13,13 @@ from app.services.audit_service import audit_service
 
 router = APIRouter()
 
+class ProcessEvaluationRequest(BaseModel):
+    client_extracted_text: Optional[str] = None
+
 @router.post("/process/{candidate_id}", response_model=EvaluationResponseSchema)
 def run_evaluation(
     candidate_id: str,
+    payload: Optional[ProcessEvaluationRequest] = None,
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
@@ -28,7 +32,29 @@ def run_evaluation(
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng liên quan.")
 
-    # Tự động phục hồi văn bản nếu trước đó bị rỗng hoặc lỗi font
+    # 1. Ưu tiên tiếp nhận văn bản trích xuất chất lượng cao từ trình duyệt (Client-Assisted Text Sync)
+    if payload and payload.client_extracted_text and len(payload.client_extracted_text.strip()) > 20:
+        from app.services.pii_service import pii_service
+        from app.services.nlp.font_normalizer import font_normalizer
+
+        normalized_client_text = font_normalizer.normalize(payload.client_extracted_text.strip())
+        if len(normalized_client_text) > 20 and "[hồ sơ" not in normalized_client_text.lower():
+            candidate.raw_text = normalized_client_text
+            candidate.masked_text = pii_service.mask_text(normalized_client_text)
+            candidate.text_preview = candidate.masked_text[:200]
+
+            contact_info = pii_service.extract_contact_info(normalized_client_text, candidate.original_filename)
+            if contact_info.get("name") and "Candidate #" in candidate.masked_name:
+                candidate.masked_name = contact_info["name"]
+            if contact_info.get("email") and not candidate.email:
+                candidate.email = contact_info["email"]
+            if contact_info.get("phone") and not candidate.phone:
+                candidate.phone = contact_info["phone"]
+
+            db.commit()
+            db.refresh(candidate)
+
+    # 2. Tự động phục hồi văn bản nếu trước đó bị rỗng hoặc lỗi font
     current_text = candidate.masked_text or candidate.raw_text or ""
     if len(current_text.strip()) < 50 or "[hồ sơ" in current_text.lower():
         import os

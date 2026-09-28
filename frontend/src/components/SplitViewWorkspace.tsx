@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FileText,
   CheckCircle,
@@ -57,6 +57,8 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [authToken, setAuthToken] = useState<string>('');
   const [isReEvaluating, setIsReEvaluating] = useState(false);
+  const [clientExtractedText, setClientExtractedText] = useState<string>('');
+  const lastAutoSyncedCandidateRef = useRef<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -85,6 +87,37 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
     void fetchEvaluation();
   }, [fetchEvaluation]);
 
+  const handleClientTextExtracted = useCallback(
+    async (text: string) => {
+      setClientExtractedText(text);
+      // Tự động đồng bộ và kích hoạt AI thẩm định nếu hồ sơ hiện tại bị 0 điểm do scan ảnh/font nhưng trình duyệt đọc được
+      if (
+        text &&
+        text.trim().length > 50 &&
+        evaluation &&
+        lastAutoSyncedCandidateRef.current !== candidate.id &&
+        (evaluation.overall_score === 0 ||
+          evaluation.ai_summary?.toLowerCase().includes('scan ảnh') ||
+          evaluation.ai_summary?.toLowerCase().includes('không chứa lớp văn bản') ||
+          evaluation.ai_summary?.toLowerCase().includes('không chứa text layer'))
+      ) {
+        lastAutoSyncedCandidateRef.current = candidate.id;
+        try {
+          setIsReEvaluating(true);
+          const updated = await evaluationApi.process(candidate.id, text);
+          setEvaluation(updated);
+          setOverrideScore(updated.hr_override_score ?? updated.overall_score);
+          onEvaluationUpdated();
+        } catch (e) {
+          console.error('Lỗi khi tự động đồng bộ text client lên AI:', e);
+        } finally {
+          setIsReEvaluating(false);
+        }
+      }
+    },
+    [candidate.id, evaluation, onEvaluationUpdated]
+  );
+
   const handleReEvaluate = async () => {
     if (currentUser?.role === 'PENDING') {
       alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Chỉ HR chính thức mới có quyền kích hoạt thẩm định AI.');
@@ -92,7 +125,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
     }
     setIsReEvaluating(true);
     try {
-      const updated = await evaluationApi.process(candidate.id);
+      const updated = await evaluationApi.process(candidate.id, clientExtractedText || undefined);
       setEvaluation(updated);
       setOverrideScore(updated.hr_override_score ?? updated.overall_score);
       onEvaluationUpdated();
@@ -279,12 +312,12 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
       </div>
 
       {/* Split-View Workspace Area */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-700/80 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-700/80 overflow-hidden min-h-0">
         {/* PANE 1: Smart Audit & PDF Viewer */}
         <div
           className={`${
             mobileTab === 'pdf' ? 'flex' : 'hidden lg:flex'
-          } flex-col bg-slate-950 h-full overflow-hidden`}
+          } flex-col bg-slate-950 h-full overflow-hidden min-h-0`}
         >
           <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4 py-2 flex items-center justify-between text-xs text-slate-400 shrink-0">
             {/* View Mode Switcher */}
@@ -337,7 +370,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
             </a>
           </div>
 
-          <div className="flex-1 w-full h-full bg-slate-950 overflow-hidden">
+          <div className="flex-1 w-full h-full bg-slate-950 overflow-hidden min-h-0 flex flex-col">
             {leftPaneMode === 'pdf_interactive' ? (
               <PDFInteractiveViewer
                 pdfUrl={pdfUrl}
@@ -347,6 +380,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
                 activeHighlightQuote={activeHighlightQuote}
                 candidateName={candidate.masked_name}
                 onSelectQuote={(q) => setActiveHighlightQuote(q)}
+                onTextExtracted={handleClientTextExtracted}
               />
             ) : leftPaneMode === 'smart_audit' ? (
               <SmartCVViewer
@@ -372,7 +406,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
         <div
           className={`${
             mobileTab === 'analysis' ? 'flex' : 'hidden lg:flex'
-          } flex-col bg-slate-900 h-full overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5`}
+          } flex-col bg-slate-900 h-full overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-5 min-h-0`}
         >
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-3 py-16">

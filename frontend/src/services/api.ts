@@ -94,12 +94,13 @@ export const evaluationApi = {
     const response = await apiClient.get(`/evaluations/candidate/${candidateId}`);
     return response.data;
   },
-  process: async (candidateId: string): Promise<Evaluation> => {
-    const response = await apiClient.post(`/evaluations/process/${candidateId}`);
+  process: async (candidateId: string, clientExtractedText?: string): Promise<Evaluation> => {
+    const payload = clientExtractedText ? { client_extracted_text: clientExtractedText } : {};
+    const response = await apiClient.post(`/evaluations/process/${candidateId}`, payload);
     return response.data;
   },
-  evaluate: async (candidateId: string): Promise<Evaluation> => {
-    return evaluationApi.process(candidateId);
+  evaluate: async (candidateId: string, clientExtractedText?: string): Promise<Evaluation> => {
+    return evaluationApi.process(candidateId, clientExtractedText);
   },
   override: async (evaluationId: string, hr_override_score: number, hr_override_reason: string): Promise<Evaluation> => {
     const response = await apiClient.post(`/overrides/${evaluationId}`, {

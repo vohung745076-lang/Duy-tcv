@@ -106,10 +106,21 @@ export const PDFPageRenderer: React.FC<PDFPageRendererProps> = ({
             const kwLower = kw.toLowerCase().trim();
 
             if (pageFullTextLower.includes(kwLower)) {
-              const matchingItems = items.filter((it) => {
+              let matchingItems = items.filter((it) => {
                 const strLower = (it.str || '').toLowerCase();
                 return strLower.includes(kwLower);
               });
+
+              // Nếu cụm từ trải dài qua nhiều item (do PDF.js tách chuỗi), tìm các item chứa từ khóa chính
+              if (matchingItems.length === 0) {
+                const words = kwLower.split(/\s+/).filter((w) => w.length > 1);
+                if (words.length > 0) {
+                  matchingItems = items.filter((it) => {
+                    const strLower = (it.str || '').toLowerCase();
+                    return words.some((w) => strLower.includes(w));
+                  });
+                }
+              }
 
               if (matchingItems.length > 0) {
                 // Nhóm theo dòng (Y-axis) để hộp khoanh vùng gọn gàng bám đúng dòng chữ
