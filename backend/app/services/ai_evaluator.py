@@ -4,6 +4,8 @@ import re
 import requests
 from typing import Dict, Any, List
 from app.core.config import settings
+from app.services.nlp.font_normalizer import font_normalizer
+from app.services.nlp.semantic_matcher import semantic_matcher
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +23,17 @@ QUY TẮC BẮT BUỘC (ĐỐI SOÁT CHUYÊN SÂU & XÉT KỸ):
    - Bóc tách thành từng bản ghi riêng biệt: đặt `category: "Chứng chỉ của ngành"`, `title`, trích dẫn câu nguyên văn (`raw_quote`), và phân tích giá trị chuyên môn (`value_add_analysis`).
 
 3. TỰ ĐỘNG BÓC TÁCH KỸ NĂNG BỔ TRỢ & ĐIỂM MẠNH NÊU THÊM (ADDITIONAL HIGHLIGHTS - XANH DƯƠNG):
-   - Các kỹ năng, công nghệ, thành tích nổi bật ngoài JD mang lại giá trị gia tăng.
+   - Các kỹ năng, công nghệ, thành tích nổi bật ngoài JD mang lại giá trị gia tăng (Giải thưởng, Dự án, Công nghệ mở rộng).
 
-4. ĐIỂM THIẾU HỤT & KHOẢNG TRỐNG (MISSING GAPS - ĐỎ / HỔ PHÁCH):
-   - Nếu tiêu chí không có trong CV, ghi `matched: false`, `raw_quote: ""` và giải thích rõ khoảng trống cần làm rõ.
+4. ĐIỂM THIẾU HỤT & KHOẢNG TRỐNG (MISSING GAPS - ĐỎ):
+   - Nếu tiêu chí không có trong CV, ghi `matched: false`, `raw_quote: ""` và giải thích trung thực khoảng trống cần làm rõ.
 
 5. BỘ CÂU HỎI PHỎNG VẤN CHUYÊN SÂU (`interview_questions`):
    - Sinh 3-5 câu hỏi phỏng vấn thực chiến:
      + Xoáy sâu vào các khoảng trống kỹ năng để kiểm tra năng lực.
      + Đặt câu hỏi thẩm định tính xác thực của các chứng chỉ của ngành hoặc điểm mạnh nổi bật.
 
-BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SCHEMA THEO CẤU TRÚC SAU (KHÔNG KÈM MARKDOWN TEXT KHÁC):
+BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SCHEMA:
 {
   "overall_score": 85.0,
   "breakdown": {
@@ -81,10 +83,10 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SCHEMA THEO CẤU TRÚC SAU (
     ],
     "additional_highlights": [
       {
-        "category": "Kỹ năng bổ trợ / Thành tích nổi bật / Chứng chỉ của ngành",
+        "category": "Giải thưởng & Thành tích / Kỹ năng bổ trợ",
         "title": "Tên điểm mạnh hoặc chứng chỉ",
         "raw_quote": "Câu nguyên văn trích từ CV",
-        "value_add_analysis": "Phân tích giá trị thặng dư mà điểm mạnh này mang lại cho tổ chức"
+        "value_add_analysis": "Phân tích giá trị thặng dư mà điểm mạnh này mang lại"
       }
     ]
   },
@@ -100,116 +102,122 @@ BẮT BUỘC TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SCHEMA THEO CẤU TRÚC SAU (
 
 class AIEvaluatorService:
     def evaluate_cv(self, masked_cv_text: str, job_title: str, criteria: Dict[str, Any]) -> Dict[str, Any]:
-        """Gửi yêu cầu tới Gemini API hoặc tạo Mock evaluation nếu chưa có API Key."""
-        api_key = settings.GEMINI_API_KEY
+        """Đánh giá hồ sơ ứng viên kết hợp LLM API (nếu có key) và bộ máy NLP Semantic Matcher thực tế."""
+        # 1. Chuẩn hóa font chữ và Unicode qua NLP FontNormalizer
+        clean_cv_text = font_normalizer.normalize(masked_cv_text)
         
-        if not api_key:
-            logger.warning("Chưa cấu hình GEMINI_API_KEY trong .env. Sử dụng Heuristic Rule-Based Evaluator nâng cao.")
-            return self._heuristic_mock_evaluate(masked_cv_text, job_title, criteria)
-            
-        try:
-            prompt = f"""
-            [JOB TITLE]: {job_title}
-            [CRITERIA]: {json.dumps(criteria, ensure_ascii=False, indent=2)}
-            
-            [MASKED CV TEXT]:
-            {masked_cv_text}
-            """
-            
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-            payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]
-                    }
-                ],
-                "generationConfig": {
-                    "response_mime_type": "application/json",
-                    "temperature": 0.2
+        api_key = settings.GEMINI_API_KEY
+        if api_key:
+            try:
+                prompt = f"""
+                [JOB TITLE]: {job_title}
+                [CRITERIA]: {json.dumps(criteria, ensure_ascii=False, indent=2)}
+                
+                [MASKED CV TEXT]:
+                {clean_cv_text}
+                """
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}],
+                    "generationConfig": {"response_mime_type": "application/json", "temperature": 0.2}
                 }
-            }
-            
-            resp = requests.post(url, json=payload, timeout=45)
-            if resp.status_code == 200:
-                data = resp.json()
-                text_response = data['candidates'][0]['content']['parts'][0]['text']
-                parsed_json = json.loads(text_response)
-                # Đảm bảo các trường cần thiết luôn tồn tại
-                if "breakdown" in parsed_json:
-                    if "additional_highlights" not in parsed_json["breakdown"]:
-                        parsed_json["breakdown"]["additional_highlights"] = []
-                    if "industry_certifications" not in parsed_json["breakdown"]:
-                        parsed_json["breakdown"]["industry_certifications"] = [
-                            h for h in parsed_json["breakdown"]["additional_highlights"]
-                            if "chứng chỉ" in h.get("category", "").lower() or "cert" in h.get("title", "").lower()
-                        ]
-                return parsed_json
-            else:
-                logger.error(f"Gemini API error: {resp.status_code} - {resp.text}")
-                return self._heuristic_mock_evaluate(masked_cv_text, job_title, criteria)
-        except Exception as e:
-            logger.error(f"Lỗi khi gọi AI Evaluator Service: {str(e)}")
-            return self._heuristic_mock_evaluate(masked_cv_text, job_title, criteria)
+                resp = requests.post(url, json=payload, timeout=45)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text_response = data['candidates'][0]['content']['parts'][0]['text']
+                    parsed = json.loads(text_response)
+                    if "breakdown" in parsed:
+                        if "industry_certifications" not in parsed["breakdown"]:
+                            parsed["breakdown"]["industry_certifications"] = semantic_matcher.extract_industry_certifications(clean_cv_text)
+                        if "additional_highlights" not in parsed["breakdown"]:
+                            parsed["breakdown"]["additional_highlights"] = []
+                        return parsed
+            except Exception as e:
+                logger.warning(f"Lỗi gọi Gemini API, chuyển sang NLP Semantic Engine: {e}")
 
-    def _heuristic_mock_evaluate(self, cv_text: str, job_title: str, criteria: Dict[str, Any]) -> Dict[str, Any]:
-        """Tạo dữ liệu đánh giá Heuristic thông minh, thực tế, chuẩn xác theo từng câu chữ trong CV."""
-        cv_lower = cv_text.lower()
+        # 2. Đánh giá bằng NLP Semantic Engine chuẩn xác, thực tế
+        return self._nlp_semantic_evaluate(clean_cv_text, job_title, criteria)
+
+    def _nlp_semantic_evaluate(self, cv_text: str, job_title: str, criteria: Dict[str, Any]) -> Dict[str, Any]:
+        """Bộ máy thẩm định NLP thực tế: đối soát từng từ khóa, bóc tách câu trích dẫn và tính điểm trung thực."""
         req_skills = criteria.get("required_skills", [])
         pref_skills = criteria.get("preferred_skills", [])
         min_exp = criteria.get("min_years_experience", 1.0)
         edu_req = criteria.get("education_level", "Bachelor")
+        weights = criteria.get("weights", {"skills": 0.5, "experience": 0.3, "education": 0.2})
 
-        # Chia dòng CV để lấy trích dẫn nguyên văn chính xác
-        lines = [line.strip() for line in cv_text.split('\n') if len(line.strip()) > 3]
+        cv_lower = cv_text.lower()
+        is_empty_or_scan = len(cv_text.strip()) < 30 or "[hồ sơ cv dạng scan" in cv_lower
 
-        def find_best_quote(keyword: str) -> str:
-            kw_lower = keyword.lower()
-            matching_lines = [l for l in lines if kw_lower in l.lower()]
-            if matching_lines:
-                # Chọn dòng ngắn gọn xúc tích nhất làm quote
-                return min(matching_lines, key=len)
-            # Nếu không tìm thấy dòng riêng biệt, trích xuất đoạn ngữ cảnh xung quanh
-            pattern = re.compile(rf'([^.\n]*?{re.escape(keyword)}[^.\n]*)', re.IGNORECASE)
-            match = pattern.search(cv_text)
-            if match:
-                return match.group(1).strip()
-            return ""
+        if is_empty_or_scan:
+            # Báo cáo trung thực: File scan ảnh hoặc không có text layer
+            return {
+                "overall_score": 0.0,
+                "breakdown": {
+                    "skills": {
+                        "score": 0.0,
+                        "evidence": [
+                            {
+                                "criterion": f"Kỹ năng: {s}",
+                                "matched": False,
+                                "score": 0.0,
+                                "raw_quote": "",
+                                "explanation": "Hồ sơ dạng scan ảnh hoặc đồ họa không chứa text layer để AI đọc tự động."
+                            } for s in req_skills
+                        ]
+                    },
+                    "experience": {
+                        "score": 0.0,
+                        "evidence": [{
+                            "criterion": f"Kinh nghiệm làm việc (Yêu cầu: {min_exp} năm)",
+                            "matched": False,
+                            "score": 0.0,
+                            "raw_quote": "",
+                            "explanation": "Chưa có văn bản bóc tách để đối soát số năm kinh nghiệm."
+                        }]
+                    },
+                    "education": {
+                        "score": 0.0,
+                        "evidence": [{
+                            "criterion": f"Học vấn: {edu_req}",
+                            "matched": False,
+                            "score": 0.0,
+                            "raw_quote": "",
+                            "explanation": "Chưa có văn bản bóc tách để đối soát bằng cấp."
+                        }]
+                    },
+                    "industry_certifications": [],
+                    "additional_highlights": []
+                },
+                "ai_summary": "⚠️ Hồ sơ ứng viên ở định dạng scan ảnh hoặc không chứa lớp văn bản (Text Layer). AI không thể đọc tự động nội dung.",
+                "interview_questions": [
+                    {
+                        "question": "Hồ sơ của bạn hiện ở dạng scan đồ họa. Bạn có thể giới thiệu tóm tắt quá trình học tập và kỹ năng nổi bật của mình không?",
+                        "reason_to_ask": "Làm rõ thông tin cơ bản do file PDF không có text layer."
+                    }
+                ]
+            }
 
-        def check_skill_match(skill_str: str) -> tuple:
-            # Hỗ trợ kỹ năng ghép như "Power BI/Tableau", "SQL, Python", "Docker / Kubernetes"
-            sub_parts = [p.strip() for p in re.split(r'[/,|+]', skill_str) if len(p.strip()) > 1]
-            if not sub_parts:
-                sub_parts = [skill_str.strip()]
-
-            for part in sub_parts:
-                p_lower = part.lower()
-                # Kiểm tra từ khóa trong văn bản
-                if p_lower in cv_lower:
-                    quote = find_best_quote(part) or find_best_quote(p_lower)
-                    return True, part, quote
-            return False, "", ""
-
-        # 1. ĐỐI SOÁT KỸ NĂNG BẮT BUỘC
+        # 1. ĐỐI SOÁT KỸ NĂNG BẮT BUỘC QUA SEMANTIC MATCHER
         skills_evidence = []
-        matched_skills_count = 0
-        missing_skills_list = []
+        matched_count = 0
+        missing_skills = []
 
         for skill in req_skills:
-            is_matched, matched_part, raw_quote = check_skill_match(skill)
+            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, skill)
             if is_matched:
-                matched_skills_count += 1
-                if not raw_quote:
-                    raw_quote = f"Kỹ năng {matched_part} xuất hiện trong hồ sơ ứng viên."
+                matched_count += 1
+                if not quote:
+                    quote = f"Kỹ năng '{matched_part}' xuất hiện trong hồ sơ ứng viên."
                 skills_evidence.append({
                     "criterion": f"Kỹ năng bắt buộc: {skill}",
                     "matched": True,
                     "score": 100.0,
-                    "raw_quote": raw_quote,
+                    "raw_quote": quote,
                     "explanation": f"Tìm thấy bằng chứng ứng dụng kỹ năng '{matched_part}' trong CV."
                 })
             else:
-                missing_skills_list.append(skill)
+                missing_skills.append(skill)
                 skills_evidence.append({
                     "criterion": f"Kỹ năng bắt buộc: {skill}",
                     "matched": False,
@@ -220,15 +228,15 @@ class AIEvaluatorService:
 
         # 2. ĐỐI SOÁT KỸ NĂNG ƯU TIÊN
         for skill in pref_skills:
-            is_matched, matched_part, raw_quote = check_skill_match(skill)
+            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, skill)
             if is_matched:
-                if not raw_quote:
-                    raw_quote = f"Kỹ năng ưu tiên {matched_part} được đề cập trong hồ sơ."
+                if not quote:
+                    quote = f"Kỹ năng ưu tiên '{matched_part}' được ghi nhận trong CV."
                 skills_evidence.append({
                     "criterion": f"Kỹ năng ưu tiên: {skill}",
                     "matched": True,
                     "score": 85.0,
-                    "raw_quote": raw_quote,
+                    "raw_quote": quote,
                     "explanation": f"Kỹ năng điểm cộng: '{matched_part}' xuất hiện trong hồ sơ."
                 })
             else:
@@ -240,97 +248,49 @@ class AIEvaluatorService:
                     "explanation": f"Không đề cập kỹ năng ưu tiên '{skill}'."
                 })
 
-        skills_score = round((matched_skills_count / max(len(req_skills), 1)) * 100.0, 1)
+        skills_score = round((matched_count / max(len(req_skills), 1)) * 100.0, 1)
 
-        # 3. BÓC TÁCH MỤC "CHỨNG CHỈ CỦA NGÀNH" (INDUSTRY CERTIFICATIONS)
-        known_industry_certs = [
-            ("Data Analyst Associate (Power BI)", "Chứng chỉ chuyên sâu phân tích & trực quan hóa dữ liệu của Microsoft Power BI", ["data analyst associate", "power bi associate", "pl-300", "da-100"]),
-            ("IBM Data Analyst Certificate", "Chứng chỉ nghề nghiệp phân tích dữ liệu chuyên nghiệp toàn cầu của IBM", ["ibm data analyst", "ibm certificate", "ibm data"]),
-            ("Google Data Analytics Certificate", "Chứng chỉ phân tích dữ liệu chuyên nghiệp từ Google", ["google data analytics"]),
-            ("Microsoft Certified: Azure Data", "Chứng chỉ kỹ sư & phân tích dữ liệu đám mây Microsoft Azure", ["azure data", "dp-900", "dp-203"]),
-            ("Tableau Desktop Specialist", "Chứng chỉ trực quan hóa dữ liệu Tableau chuyên nghiệp", ["tableau desktop specialist", "tableau specialist"]),
-            ("AWS Certified Cloud Practitioner", "Chứng chỉ nền tảng điện toán đám mây Amazon Web Services", ["aws certified", "cloud practitioner"]),
-            ("AWS Solutions Architect", "Chứng chỉ kiến trúc sư giải pháp đám mây AWS", ["solutions architect"]),
-            ("PMP (Project Management)", "Chứng chỉ Quản lý Dự án Quốc tế chuẩn PMI", ["pmp", "project management professional"]),
-            ("Professional Scrum Master (PSM)", "Chứng chỉ điều phối dự án Agile / Scrum quốc tế", ["scrum master", "psm i", "psm ii", "csm"]),
-            ("IELTS", "Chứng chỉ đánh giá năng lực tiếng Anh học thuật quốc tế", ["ielts"]),
-            ("TOEIC", "Chứng chỉ tiếng Anh giao tiếp chuyên nghiệp môi trường làm việc", ["toeic"]),
-        ]
+        # 3. BÓC TÁCH MỤC "CHỨNG CHỈ CỦA NGÀNH"
+        industry_certifications = semantic_matcher.extract_industry_certifications(cv_text)
 
-        industry_certifications = []
-        for cert_title, cert_desc, kw_list in known_industry_certs:
-            if any(kw in cv_lower for kw in kw_list):
-                q = ""
-                for kw in kw_list:
-                    q = find_best_quote(kw)
-                    if q:
-                        break
-                if not q:
-                    q = f"Chứng chỉ {cert_title} được ghi nhận trong CV."
-                industry_certifications.append({
-                    "category": "Chứng chỉ của ngành",
-                    "title": cert_title,
-                    "raw_quote": q,
-                    "value_add_analysis": f"{cert_desc}. Đây là minh chứng uy tín xác thực năng lực chuyên môn thực tế của ứng viên."
-                })
+        # 4. BÓC TÁCH GIẢI THƯỞNG & THÀNH TÍCH NỔI BẬT NGOÀI JD
+        cert_quotes = [c["raw_quote"] for c in industry_certifications]
+        award_extras = semantic_matcher.extract_awards_and_extras(cv_text, excluded_quotes=cert_quotes)
 
-        # Quét thêm các dòng có chữ "chứng chỉ" hoặc "certificate" nếu chưa được gom
-        for line in lines:
-            line_l = line.lower()
-            if any(k in line_l for k in ["chứng chỉ", "certificate", "cert "]) and len(line) > 10:
-                if line.strip().upper() in ["CHỨNG CHỈ", "CERTIFICATE", "CERTIFICATES", "CHỨNG CHỈ NGHỀ NGHIỆP"]:
-                    continue
-                if not any(c["title"].lower() in line_l or line_l in c["raw_quote"].lower() for c in industry_certifications):
-                    title_clean = re.sub(r'^(?:\d{4}\s*[:\-–]?\s*|chứng\s*chỉ\s*[:\-–]?\s*)', '', line, flags=re.IGNORECASE).strip()
-                    if len(title_clean) > 4:
-                        industry_certifications.append({
-                            "category": "Chứng chỉ của ngành",
-                            "title": title_clean[:45],
-                            "raw_quote": line,
-                            "value_add_analysis": "Chứng chỉ chuyên môn bổ trợ được ứng viên hoàn thành và ghi nhận trong hồ sơ."
-                        })
-
-        # 4. KỸ NĂNG BỔ TRỢ & ĐIỂM MẠNH NÊU THÊM (ADDITIONAL HIGHLIGHTS)
-        common_bonus_keywords = [
-            ("Docker", "Kỹ năng bổ trợ", "Containerization & DevOps đóng gói phần mềm"),
-            ("Kubernetes", "Kỹ năng bổ trợ", "Điều phối hạ tầng Cloud-native"),
-            ("AWS", "Năng lực Cloud", "Điện toán đám mây Amazon Web Services"),
-            ("Azure", "Năng lực Cloud", "Hạ tầng đám mây Microsoft Azure"),
-            ("Git", "Quy trình làm việc", "Quản lý mã nguồn & phối hợp nhóm"),
-            ("Agile", "Quy trình làm việc", "Mô hình phát triển phần mềm linh hoạt Agile"),
-            ("Scrum", "Quy trình làm việc", "Quy trình quản lý dự án Scrum"),
+        # Các công nghệ làm thêm ngoài JD
+        common_extra_techs = [
             ("Datamart", "Kiến trúc Dữ liệu", "Xây dựng và khai thác kho dữ liệu Datamart / DWH"),
             ("Data Warehouse", "Kiến trúc Dữ liệu", "Thiết kế và tối ưu kho dữ liệu tập trung"),
-            ("Dashboard", "Trực quan hóa", "Thiết kế hệ thống báo cáo và Dashboard phân tích quản trị"),
-            ("CSDL", "Cơ sở dữ liệu", "Quản trị và tối ưu truy vấn cơ sở dữ liệu quan hệ"),
-            ("Machine Learning", "AI & Dữ liệu", "Nghiên cứu và ứng dụng các thuật toán máy học"),
-            ("EDA", "Phân tích Dữ liệu", "Thăm dò và xử lý dữ liệu Exploratory Data Analysis"),
+            ("Dashboard", "Trực quan hóa", "Thiết kế hệ thống Dashboard theo dõi chỉ số ATM/CRM"),
+            ("CSDL", "Cơ sở dữ liệu", "Quản trị và tối ưu truy vấn cơ sở dữ liệu"),
+            ("EDA", "Phân tích Dữ liệu", "Thăm dò và tiền xử lý dữ liệu Exploratory Data Analysis"),
+            ("Machine Learning", "AI & Dữ liệu", "Hỗ trợ xây dựng và triển khai bài toán Machine Learning"),
+            ("Git", "Quy trình làm việc", "Quản lý mã nguồn & phối hợp nhóm"),
+            ("Agile", "Quy trình làm việc", "Mô hình phát triển phần mềm linh hoạt Agile"),
         ]
 
-        all_jd_skills_lower = [s.lower() for s in req_skills + pref_skills]
-        additional_highlights = list(industry_certifications)  # Gồm cả chứng chỉ
+        jd_skills_lower = [s.lower() for s in req_skills + pref_skills]
+        additional_highlights = list(award_extras)
 
-        for kw, cat, desc in common_bonus_keywords:
-            if kw.lower() not in all_jd_skills_lower and kw.lower() in cv_lower:
-                quote = find_best_quote(kw)
-                if not quote:
-                    quote = f"Ứng viên có kinh nghiệm ứng dụng {kw}."
-                if not any(kw.lower() == h["title"].lower() for h in additional_highlights):
+        for kw, cat, desc in common_extra_techs:
+            if kw.lower() not in jd_skills_lower and kw.lower() in cv_lower:
+                quote = semantic_matcher.find_best_quote(cv_text, kw)
+                if not any(h["title"].lower() == kw.lower() for h in additional_highlights):
                     additional_highlights.append({
                         "category": cat,
                         "title": kw,
-                        "raw_quote": quote,
-                        "value_add_analysis": f"{desc}. Giúp ứng viên thích ứng nhanh và đóng góp nhiều hơn cho đội ngũ so với yêu cầu tiêu chuẩn của JD."
+                        "raw_quote": quote or f"Ứng viên có kinh nghiệm làm việc với {kw}.",
+                        "value_add_analysis": f"{desc}. Mang lại giá trị gia tăng giúp ứng viên đóng góp nhanh chóng cho đội ngũ."
                     })
 
         # 5. ĐỐI SOÁT KINH NGHIỆM THỰC CHIẾN
-        exp_matched = any(w in cv_lower for w in ["year", "năm", "exp", "kinh nghiệm", "kinh nghiem", "2020", "2021", "2022", "2023", "2024", "2025"])
+        exp_keywords = ["data analyst", "kinh nghiệm", "2020", "2021", "2022", "2023", "2024", "năm", "svt"]
+        exp_matched = any(k in cv_lower for k in exp_keywords)
         exp_score = 90.0 if exp_matched else 60.0
         exp_quote = (
-            find_best_quote("data analyst") or
-            find_best_quote("svt") or
-            find_best_quote("kinh nghiệm") or
-            find_best_quote("năm") or
+            semantic_matcher.find_best_quote(cv_text, "data analyst") or
+            semantic_matcher.find_best_quote(cv_text, "svt") or
+            semantic_matcher.find_best_quote(cv_text, "kinh nghiệm") or
             "Quá trình làm việc thực tế được ghi nhận trong CV."
         )
         exp_evidence = [{
@@ -342,13 +302,13 @@ class AIEvaluatorService:
         }]
 
         # 6. ĐỐI SOÁT HỌC VẤN & BẰNG CẤP
-        edu_matched = any(w in cv_lower for w in ["đại học", "topcv", "cử nhân", "bachelor", "khoa học máy tính", "kỹ sư", "master", "university", "college"])
+        edu_keywords = ["đại học", "topcv", "cử nhân", "bachelor", "khoa học máy tính", "kỹ sư"]
+        edu_matched = any(k in cv_lower for k in edu_keywords)
         edu_score = 95.0 if edu_matched else 70.0
         edu_quote = (
-            find_best_quote("khoa học máy tính") or
-            find_best_quote("topcv") or
-            find_best_quote("đại học") or
-            find_best_quote("cử nhân") or
+            semantic_matcher.find_best_quote(cv_text, "khoa học máy tính") or
+            semantic_matcher.find_best_quote(cv_text, "đại học topcv") or
+            semantic_matcher.find_best_quote(cv_text, "cử nhân") or
             "Trình độ học vấn ghi nhận trong hồ sơ."
         )
         edu_evidence = [{
@@ -359,22 +319,20 @@ class AIEvaluatorService:
             "explanation": "Đạt yêu cầu học vấn cử nhân chuyên ngành liên quan." if edu_matched else "Cần đối chiếu bằng cấp trong buổi phỏng vấn."
         }]
 
-        # Trọng số tính điểm tổng hợp
-        weights = criteria.get("weights", {"skills": 0.5, "experience": 0.3, "education": 0.2})
+        # 7. TÍNH ĐIỂM TỔNG HỢP CÓ TRỌNG SỐ THẬT (TOÁN HỌC)
         overall_score = round(
             skills_score * weights.get("skills", 0.5) +
             exp_score * weights.get("experience", 0.3) +
             edu_score * weights.get("education", 0.2), 1
         )
 
-        # 7. BỘ CÂU HỎI PHỎNG VẤN ĐÀO SÂU (INTERVIEW KIT)
+        # 8. BỘ CÂU HỎI PHỎNG VẤN TRỰC DIỆN
         interview_questions = []
-        if missing_skills_list:
-            for missing_s in missing_skills_list[:2]:
-                interview_questions.append({
-                    "question": f"Vị trí tuyển dụng yêu cầu kỹ năng '{missing_s}'. Trong quá trình học tập hoặc làm việc, bạn đã có cơ hội tiếp cận hoặc áp dụng công nghệ này chưa?",
-                    "reason_to_ask": f"Thẩm định khoảng trống kỹ năng '{missing_s}' vì chưa được tìm thấy trực tiếp trong CV."
-                })
+        for missing_s in missing_skills[:2]:
+            interview_questions.append({
+                "question": f"Vị trí tuyển dụng yêu cầu kỹ năng '{missing_s}'. Trong quá trình học tập hoặc làm việc, bạn đã có cơ hội tiếp cận hoặc áp dụng công nghệ này chưa?",
+                "reason_to_ask": f"Thẩm định khoảng trống kỹ năng '{missing_s}' vì chưa được tìm thấy trực tiếp trong CV."
+            })
 
         if industry_certifications:
             top_cert = industry_certifications[0]["title"]
@@ -390,9 +348,9 @@ class AIEvaluatorService:
 
         ai_summary = (
             f"Ứng viên đạt mức độ tương thích {overall_score}% so với vị trí {job_title}. "
-            f"Kỹ năng cốt lõi đáp ứng {matched_skills_count}/{len(req_skills)} tiêu chuẩn bắt buộc. "
+            f"Kỹ năng cốt lõi đáp ứng {matched_count}/{len(req_skills)} tiêu chuẩn bắt buộc. "
             f"Ghi nhận {len(industry_certifications)} chứng chỉ của ngành uy tín và "
-            f"{len(additional_highlights) - len(industry_certifications)} kỹ năng thặng dư giá trị gia tăng."
+            f"{len(additional_highlights)} điểm sáng & kỹ năng thặng dư giá trị gia tăng."
         )
 
         return {

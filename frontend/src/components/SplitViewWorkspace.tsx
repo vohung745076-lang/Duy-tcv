@@ -14,6 +14,7 @@ import {
   Lock,
   Eye,
   Printer,
+  RefreshCw,
 } from 'lucide-react';
 import { candidateApi, evaluationApi } from '../services/api';
 import type { Candidate, Evaluation, Job, IndustryCertification } from '../types';
@@ -55,6 +56,7 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   const [manualHighlightQuote, setManualHighlightQuote] = useState('');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [authToken, setAuthToken] = useState<string>('');
+  const [isReEvaluating, setIsReEvaluating] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -82,6 +84,25 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
   useEffect(() => {
     void fetchEvaluation();
   }, [fetchEvaluation]);
+
+  const handleReEvaluate = async () => {
+    if (currentUser?.role === 'PENDING') {
+      alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Chỉ HR chính thức mới có quyền kích hoạt thẩm định AI.');
+      return;
+    }
+    setIsReEvaluating(true);
+    try {
+      const updated = await evaluationApi.process(candidate.id);
+      setEvaluation(updated);
+      setOverrideScore(updated.hr_override_score ?? updated.overall_score);
+      onEvaluationUpdated();
+    } catch (err: any) {
+      console.error('Lỗi khi chạy lại thẩm định AI:', err);
+      alert('Không thể chạy lại thẩm định: ' + (err?.response?.data?.detail || err?.message || 'Lỗi kết nối'));
+    } finally {
+      setIsReEvaluating(false);
+    }
+  };
 
   const handleOpenOverride = () => {
     if (currentUser?.role === 'PENDING') {
@@ -185,6 +206,17 @@ export const SplitViewWorkspace: React.FC<SplitViewWorkspaceProps> = ({
 
         {/* Actions & Candidate Navigation */}
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleReEvaluate}
+            disabled={isReEvaluating}
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            title="Kích hoạt lại AI để quét bóc tách font chữ và đối soát lại toàn bộ CV với JD"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isReEvaluating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isReEvaluating ? 'Đang thẩm định...' : 'Chạy lại Thẩm định AI'}</span>
+            <span className="sm:hidden">{isReEvaluating ? '...' : 'Quét lại'}</span>
+          </button>
+
           <button
             onClick={() => setExportModalOpen(true)}
             className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-blue-500/20 transition-all shrink-0 cursor-pointer"

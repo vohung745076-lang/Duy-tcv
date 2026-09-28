@@ -204,16 +204,24 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
             // Tìm các text items khớp với từ khóa
             const matchingItems = items.filter((it) => {
               const strLower = (it.str || '').toLowerCase();
-              return strLower.includes(kwLower) || kwLower.includes(strLower) && strLower.length > 2;
+              return strLower.includes(kwLower);
             });
 
             if (matchingItems.length > 0) {
+              // Nhóm theo dòng (Y-axis) để hộp khoanh vùng gọn gàng, không bị bao trùm cả trang
+              const firstItem = matchingItems[0];
+              const [, firstVy] = viewport.convertToViewportPoint(firstItem.transform[4], firstItem.transform[5]);
+              const lineItems = matchingItems.filter((it) => {
+                const [, vy] = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
+                return Math.abs(vy - firstVy) < 20 * scale;
+              });
+
               let minX = Infinity;
               let minY = Infinity;
               let maxX = -Infinity;
               let maxY = -Infinity;
 
-              for (const it of matchingItems) {
+              for (const it of lineItems) {
                 // Biến đổi tọa độ PDF sang tọa độ Canvas Viewport
                 const tx = it.transform[4];
                 const ty = it.transform[5];
@@ -228,10 +236,10 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
               }
 
               // Mở rộng padding nhẹ để bao bọc đẹp mắt
-              const padX = 6;
-              const padY = 4;
-              const boxW = Math.max(maxX - minX + padX * 2, 40);
-              const boxH = Math.max(maxY - minY + padY * 2, 18);
+              const padX = 5;
+              const padY = 3;
+              const boxW = Math.max(maxX - minX + padX * 2, 35);
+              const boxH = Math.max(maxY - minY + padY * 2, 16);
               const boxX = Math.max(minX - padX, 2);
               const boxY = Math.max(minY - padY, 2);
 

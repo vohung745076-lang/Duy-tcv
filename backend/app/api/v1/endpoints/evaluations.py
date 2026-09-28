@@ -28,6 +28,47 @@ def run_evaluation(
     if not job:
         raise HTTPException(status_code=404, detail="Không tìm thấy vị trí tuyển dụng liên quan.")
 
+    # Tự động phục hồi văn bản nếu trước đó bị rỗng hoặc lỗi font
+    current_text = candidate.masked_text or candidate.raw_text or ""
+    if len(current_text.strip()) < 50 or "[hồ sơ" in current_text.lower():
+        import os
+        from app.core.config import settings
+        from app.services.pdf_service import pdf_service
+        from app.services.storage_service import storage_service
+        from app.services.pii_service import pii_service
+        from app.api.v1.endpoints.candidates import resolve_candidate_file_path
+
+        resolved_path = resolve_candidate_file_path(candidate.file_path)
+        new_text = ""
+        if resolved_path and os.path.exists(resolved_path):
+            new_text = pdf_service.extract_text(resolved_path)
+        else:
+            pdf_bytes, _ = storage_service.get_pdf_bytes(db, candidate_id=candidate.id, local_path=resolved_path)
+            if pdf_bytes:
+                os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+                temp_pdf_path = os.path.join(settings.STORAGE_DIR, f"temp_{candidate.id}.pdf")
+                with open(temp_pdf_path, "wb") as f:
+                    f.write(pdf_bytes)
+                new_text = pdf_service.extract_text(temp_pdf_path)
+                try:
+                    os.remove(temp_pdf_path)
+                except Exception:
+                    pass
+
+        if new_text and len(new_text.strip()) > 30 and "[hồ sơ" not in new_text.lower():
+            candidate.raw_text = new_text
+            candidate.masked_text = pii_service.mask_text(new_text)
+            candidate.text_preview = candidate.masked_text[:200]
+            contact_info = pii_service.extract_contact_info(new_text, candidate.original_filename)
+            if contact_info.get("name") and "Candidate #" in candidate.masked_name:
+                candidate.masked_name = contact_info["name"]
+            if contact_info.get("email") and not candidate.email:
+                candidate.email = contact_info["email"]
+            if contact_info.get("phone") and not candidate.phone:
+                candidate.phone = contact_info["phone"]
+            db.commit()
+            db.refresh(candidate)
+
     # Đánh giá bằng AI Evaluator
     ai_result = ai_evaluator_service.evaluate_cv(
         masked_cv_text=candidate.masked_text or candidate.raw_text,
