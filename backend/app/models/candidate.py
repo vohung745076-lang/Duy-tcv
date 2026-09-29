@@ -22,3 +22,4 @@ class Candidate(BaseModel):
     interview_time = Column(String, nullable=True)
     interview_location = Column(String, nullable=True)
     reviewed_by = Column(String, nullable=True) # Tên AI / HR đã kiểm tra
+    google_drive_url = Column(String, nullable=True) # Link Google Drive gốc từ Form/Sheet để đối soát

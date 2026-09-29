@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { X, UploadCloud, FileText, ShieldCheck, Link2, Table, CheckCircle2, Smartphone } from 'lucide-react';
 import { candidateApi } from '../services/api';
-import type { Candidate, Job } from '../types';
+import type { Candidate, Job, GoogleSyncResult } from '../types';
+import { GoogleSyncReconciliationModal } from './candidates/GoogleSyncReconciliationModal';
 
 interface CandidateUploadModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
   const [googleSheetUrl, setGoogleSheetUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncResult, setSyncResult] = useState<GoogleSyncResult | null>(null);
+  const [showReconciliation, setShowReconciliation] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -76,17 +79,19 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
 
     setIsUploading(true);
     try {
-      // Giả lập đồng bộ và tạo ứng viên từ Google Sheet
-      setTimeout(() => {
-        setIsUploading(false);
-        setSyncSuccess(true);
-        setTimeout(() => {
-          setSyncSuccess(false);
-          onClose();
-        }, 1500);
-      }, 1200);
-    } catch {
-      alert('Không thể đồng bộ Google Sheet. Vui lòng kiểm tra quyền chia sẻ công khai.');
+      const jobId = activeJob ? activeJob.id : '';
+      const result = await candidateApi.syncGoogleSheet(jobId, googleSheetUrl.trim());
+      setSyncResult(result);
+      setSyncSuccess(true);
+      if (result.candidates && result.candidates.length > 0) {
+        onUploaded(result.candidates);
+      }
+      setShowReconciliation(true);
+    } catch (err: any) {
+      console.error('Lỗi đồng bộ Google Sheet:', err);
+      const detail = err?.response?.data?.detail;
+      alert(detail || 'Không thể đồng bộ Google Sheet. Vui lòng kiểm tra lại đường link hoặc quyền chia sẻ công khai.');
+    } finally {
       setIsUploading(false);
     }
   };
@@ -259,6 +264,17 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
           </form>
         )}
       </div>
+
+      {showReconciliation && syncResult && (
+        <GoogleSyncReconciliationModal
+          isOpen={showReconciliation}
+          result={syncResult}
+          onClose={() => {
+            setShowReconciliation(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 };

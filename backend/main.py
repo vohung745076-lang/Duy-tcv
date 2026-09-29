@@ -29,6 +29,7 @@ def run_auto_migrations():
         ("candidates", "interview_location", "VARCHAR"),
         ("candidates", "reviewed_by", "VARCHAR"),
         ("candidates", "job_title", "VARCHAR"),
+        ("candidates", "google_drive_url", "VARCHAR"),
     ]
     with engine.connect() as conn:
         for table, col, col_type in columns_to_add:

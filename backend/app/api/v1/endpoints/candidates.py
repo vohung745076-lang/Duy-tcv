@@ -12,10 +12,11 @@ from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.audit_log import AuditLog
 from app.models.candidate_pdf import CandidatePDF
-from app.schemas.candidate import CandidateResponseSchema
+from app.schemas.candidate import CandidateResponseSchema, GoogleSyncRequestSchema, GoogleSyncResponseSchema
 from app.services.pdf_service import pdf_service
 from app.services.pii_service import pii_service
 from app.services.storage_service import storage_service
+from app.services.google_sync_service import google_sync_service
 
 router = APIRouter()
 
@@ -117,6 +118,41 @@ async def upload_candidates(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý nạp CV: {str(e)}")
+
+
+@router.post("/jobs/{job_id}/sync-google-sheet", response_model=GoogleSyncResponseSchema)
+def sync_google_sheet(
+    job_id: str,
+    payload: GoogleSyncRequestSchema,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """Đồng bộ ứng viên từ Google Sheet liên kết Google Form, tải CV từ Google Drive và đối soát."""
+    try:
+        result = google_sync_service.sync_and_reconcile(
+            job_id=job_id,
+            sheet_url=payload.sheet_url,
+            db=db
+        )
+
+        try:
+            audit = AuditLog(
+                action="SYNC_GOOGLE_SHEET",
+                performed_by=current_user.email,
+                details=f"Đồng bộ Google Sheet: {result['total_rows']} dòng, {result['newly_imported']} mới, {result['duplicates_skipped']} trùng lặp."
+            )
+            db.add(audit)
+            db.commit()
+        except Exception as e:
+            print(f"Lỗi ghi log audit sync: {e}")
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống khi đồng bộ Google Sheet: {str(e)}")
+
 
 @router.get("/jobs/{job_id}", response_model=List[CandidateResponseSchema])
 def list_candidates_by_job(

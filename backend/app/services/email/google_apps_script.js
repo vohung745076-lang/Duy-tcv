@@ -16,6 +16,26 @@
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+
+    // Hỗ trợ trích xuất file PDF trực tiếp từ Google Drive của tài khoản
+    if (data.action === "fetch_drive_file" && data.fileId) {
+      try {
+        var file = DriveApp.getFileById(data.fileId);
+        var blob = file.getBlob();
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          filename: file.getName(),
+          mimeType: blob.getContentType(),
+          base64: Utilities.base64Encode(blob.getBytes())
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (driveErr) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          error: "DriveApp error: " + driveErr.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     var to = data.to;
     var subject = data.subject;
     var htmlBody = data.htmlBody;

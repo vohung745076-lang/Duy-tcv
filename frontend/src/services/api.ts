@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
-import type { Job, JobCriteria, Candidate, Evaluation, CandidateRanking, AuditLog } from '../types';
+import type { Job, JobCriteria, Candidate, Evaluation, CandidateRanking, AuditLog, GoogleSyncResult } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 
@@ -85,6 +85,13 @@ export const candidateApi = {
   },
   delete: async (candidateId: string): Promise<{ message: string; deleted_id: string }> => {
     const response = await apiClient.delete(`/candidates/${candidateId}`);
+    return response.data;
+  },
+  syncGoogleSheet: async (jobId: string, sheetUrl: string, autoEvaluate: boolean = false): Promise<GoogleSyncResult> => {
+    const response = await apiClient.post(`/candidates/jobs/${jobId}/sync-google-sheet`, {
+      sheet_url: sheetUrl,
+      auto_evaluate: autoEvaluate,
+    });
     return response.data;
   },
 };

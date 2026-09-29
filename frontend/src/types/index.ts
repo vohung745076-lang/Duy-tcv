@@ -37,9 +37,32 @@ export interface Candidate {
   approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
   rejection_reason?: string | null;
   interview_type?: 'ONLINE' | 'OFFLINE' | string | null;
-  interview_time?: string | null;
   interview_location?: string | null;
   reviewed_by?: string | null;
+  google_drive_url?: string | null;
+}
+
+export interface GoogleSyncRow {
+  row_index: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  drive_url?: string;
+  status: 'IMPORTED' | 'DUPLICATE' | 'NEEDS_PERMISSION' | 'FAILED';
+  message: string;
+  candidate_id?: string;
+}
+
+export interface GoogleSyncResult {
+  success: boolean;
+  sheet_title?: string;
+  total_rows: number;
+  newly_imported: number;
+  duplicates_skipped: number;
+  permission_issues: number;
+  candidates: Candidate[];
+  reconciliation_rows: GoogleSyncRow[];
+  message: string;
 }
 
 export interface MonthlyCandidate {
