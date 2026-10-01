@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldCheck, LogIn } from 'lucide-react';
-import { Navbar } from './components/Navbar';
+import { AppSidebar, type AppNavTab } from './components/layout/AppSidebar';
+import { AppHeader } from './components/layout/AppHeader';
 import { CreateJobModal } from './components/CreateJobModal';
 import { CandidateUploadModal } from './components/CandidateUploadModal';
 import { JobsView } from './components/JobsView';
@@ -17,7 +18,8 @@ import { supabase, authService, type UserProfile } from './services/supabase';
 import { parseOAuthCallback, translateOAuthError, cleanOAuthUrl } from './utils/oauthHandler';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'jobs' | 'workspace' | 'dashboard' | 'audit' | 'monthly'>('jobs');
+  const [activeTab, setActiveTab] = useState<AppNavTab>('dashboard');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -303,141 +305,213 @@ export function App() {
     );
   }
 
+  const effectiveCandidate = selectedCandidate || (candidates.length > 0 ? candidates[0] : null);
+
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col font-['Be_Vietnam_Pro',sans-serif]">
-      {/* Top Navbar */}
-      <Navbar
-        activeJob={activeJob}
-        currentUser={currentUser}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        onLogout={handleLogout}
-        onOpenCreateJob={() => {
-          if (!currentUser) {
-            setAuthModalOpen(true);
-            return;
-          }
-          if (currentUser.role === 'PENDING') {
-            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
-            return;
-          }
-          setCreateJobOpen(true);
-        }}
-        onOpenUpload={() => {
-          if (!currentUser) {
-            setAuthModalOpen(true);
-            return;
-          }
-          if (currentUser.role === 'PENDING') {
-            alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp CV.');
-            return;
-          }
-          setUploadOpen(true);
-        }}
-        onRefresh={handleRefreshAll}
-        isRefreshing={isRefreshing}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+    <div className="min-h-screen bg-[#0D0F14] text-white flex flex-col font-sans">
+      {/* App Sidebar cố định bên trái (Desktop) hoặc Drawer (Mobile) */}
+      {currentUser && currentUser.role !== 'PENDING' && (
+        <AppSidebar
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            setMobileSidebarOpen(false);
+          }}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          isOpenMobile={mobileSidebarOpen}
+          onCloseMobile={() => setMobileSidebarOpen(false)}
+        />
+      )}
 
-      {/* Thông báo lỗi đăng nhập Google nếu có */}
-      <AuthErrorBanner
-        message={authErrorMessage || ''}
-        onDismiss={() => setAuthErrorMessage(null)}
-        onRetry={() => {
-          setAuthErrorMessage(null);
-          setAuthModalOpen(true);
-        }}
-      />
+      {/* Main Container với padding bên trái cho Sidebar trên màn hình lớn */}
+      <div className={`flex-1 flex flex-col min-h-screen ${currentUser && currentUser.role !== 'PENDING' ? 'lg:pl-64' : ''}`}>
+        {/* Top Header */}
+        <AppHeader
+          activeJob={activeJob}
+          jobs={jobs}
+          onSelectJob={(job) => setActiveJob(job)}
+          currentUser={currentUser}
+          onOpenCreateJob={() => {
+            if (!currentUser) {
+              setAuthModalOpen(true);
+              return;
+            }
+            if (currentUser.role === 'PENDING') {
+              alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+              return;
+            }
+            setCreateJobOpen(true);
+          }}
+          onOpenUpload={() => {
+            if (!currentUser) {
+              setAuthModalOpen(true);
+              return;
+            }
+            if (currentUser.role === 'PENDING') {
+              alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Nạp CV.');
+              return;
+            }
+            setUploadOpen(true);
+          }}
+          onRefresh={handleRefreshAll}
+          isRefreshing={isRefreshing}
+          onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
+        />
 
-      {/* MAIN VIEW - Gatekeeper nếu chưa đăng nhập hoặc chờ duyệt */}
-      <main className="flex-1 flex flex-col">
-        {!currentUser ? (
-          <div className="flex-1 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 max-w-md w-full text-center shadow-2xl space-y-6">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/25">
-                <ShieldCheck className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-white">Hệ Thống Tuyển Dụng Nội Bộ</h2>
-                <p className="text-xs sm:text-sm text-slate-400 mt-2 leading-relaxed">
-                  Khu vực kiểm soát và đối soát hồ sơ ứng viên bảo mật. Vui lòng đăng nhập bằng tài khoản HR hoặc Quản trị viên để truy cập dữ liệu.
+        {/* Thông báo lỗi đăng nhập Google nếu có */}
+        <AuthErrorBanner
+          message={authErrorMessage || ''}
+          onDismiss={() => setAuthErrorMessage(null)}
+          onRetry={() => {
+            setAuthErrorMessage(null);
+            setAuthModalOpen(true);
+          }}
+        />
+
+        {/* MAIN VIEW - Gatekeeper nếu chưa đăng nhập hoặc chờ duyệt */}
+        <main className="flex-1 flex flex-col">
+          {!currentUser ? (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="bg-[#161922] border border-[#242834] rounded-3xl p-6 sm:p-10 max-w-md w-full text-center shadow-2xl space-y-6">
+                <div className="w-16 h-16 rounded-2xl bg-[#1E293B] border border-[#60A5FA]/40 flex items-center justify-center mx-auto shadow-xl shadow-[#60A5FA]/15">
+                  <ShieldCheck className="w-8 h-8 text-[#60A5FA]" />
+                </div>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white">Hệ Thống Tuyển Dụng AI</h2>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                    Khu vực kiểm soát và đối soát hồ sơ ứng viên bảo mật. Vui lòng đăng nhập bằng tài khoản HR hoặc Quản trị viên để truy cập dữ liệu.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAuthModalOpen(true)}
+                  className="w-full py-3 px-6 bg-[#1E293B] hover:bg-slate-700 text-white border border-[#60A5FA]/50 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4 text-[#60A5FA]" />
+                  <span>Đăng Nhập Tài Khoản HR</span>
+                </button>
+                <p className="text-[11px] text-slate-400">
+                  Chính sách bảo mật dữ liệu ứng viên & phân quyền RBAC theo quy định tuyển dụng
                 </p>
               </div>
-              <button
-                onClick={() => setAuthModalOpen(true)}
-                className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Đăng Nhập Tài Khoản HR</span>
-              </button>
-              <p className="text-[11px] text-slate-500">
-                Chính sách bảo mật dữ liệu ứng viên & phân quyền RBAC theo quy định tuyển dụng
-              </p>
             </div>
-          </div>
-        ) : currentUser.role === 'PENDING' ? (
-          <PendingApprovalGate
-            currentUser={currentUser}
-            onRecheck={handleRecheckProfile}
-            onLogout={handleLogout}
-          />
-        ) : (
-          <>
-            {activeTab === 'jobs' && (
-              <JobsView
-                jobs={jobs}
-                activeJob={activeJob}
-                onSelectJob={(job) => setActiveJob(job)}
-                onOpenCreateJob={() => {
-                  if (currentUser.role === 'PENDING') {
-                    alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
-                    return;
-                  }
-                  setCreateJobOpen(true);
-                }}
-                onOpenExportJob={handleOpenExportJob}
-                onDeleteJob={handleDeleteJob}
-                candidates={candidates}
-                onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
-                onRunAiEvaluation={handleRunAiEvaluation}
-                evaluatingCandidateId={evaluatingCandidateId}
-              />
-            )}
+          ) : currentUser.role === 'PENDING' ? (
+            <PendingApprovalGate
+              currentUser={currentUser}
+              onRecheck={handleRecheckProfile}
+              onLogout={handleLogout}
+            />
+          ) : (
+            <>
+              {/* Tab 1: Dashboard (Bảng Điều Khiển Tuyển Dụng AI) */}
+              {(activeTab === 'dashboard' || activeTab === 'candidates') && activeJob && (
+                <DashboardView
+                  activeJob={activeJob}
+                  onSelectCandidateToWorkspace={handleSelectCandidateById}
+                />
+              )}
 
-            {activeTab === 'workspace' && selectedCandidate && activeJob && (
-              <SplitViewWorkspace
-                candidate={selectedCandidate}
-                activeJob={activeJob}
-                candidates={candidates}
-                currentUser={currentUser}
-                onSelectCandidate={(c) => setSelectedCandidate(c)}
-                onEvaluationUpdated={() => {
-                  if (activeJob) fetchCandidates(activeJob.id);
-                }}
-              />
-            )}
+              {/* Tab 2: Tin tuyển dụng (Quản lý Vị trí & JD) */}
+              {activeTab === 'jobs' && (
+                <JobsView
+                  jobs={jobs}
+                  activeJob={activeJob}
+                  onSelectJob={(job) => setActiveJob(job)}
+                  onOpenCreateJob={() => {
+                    if (currentUser.role === 'PENDING') {
+                      alert('Tài khoản của bạn đang ở trạng thái Chờ duyệt. Vui lòng liên hệ Quản trị viên để được cấp quyền Tạo JD.');
+                      return;
+                    }
+                    setCreateJobOpen(true);
+                  }}
+                  onOpenExportJob={handleOpenExportJob}
+                  onDeleteJob={handleDeleteJob}
+                  candidates={candidates}
+                  onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
+                  onRunAiEvaluation={handleRunAiEvaluation}
+                  evaluatingCandidateId={evaluatingCandidateId}
+                />
+              )}
 
-            {activeTab === 'dashboard' && activeJob && (
-              <DashboardView
-                activeJob={activeJob}
-                onSelectCandidateToWorkspace={handleSelectCandidateById}
-              />
-            )}
+              {/* Tab 3: Sàng lọc AI (Workspace Thẩm định 2 Cột) */}
+              {activeTab === 'workspace' && effectiveCandidate && activeJob && (
+                <SplitViewWorkspace
+                  candidate={effectiveCandidate}
+                  activeJob={activeJob}
+                  candidates={candidates}
+                  currentUser={currentUser}
+                  onSelectCandidate={(c) => setSelectedCandidate(c)}
+                  onEvaluationUpdated={() => {
+                    if (activeJob) fetchCandidates(activeJob.id);
+                  }}
+                />
+              )}
 
-            {activeTab === 'audit' && activeJob && (
-              <DashboardView
-                activeJob={activeJob}
-                onSelectCandidateToWorkspace={handleSelectCandidateById}
-                showAuditOnly={true}
-              />
-            )}
+              {activeTab === 'workspace' && !effectiveCandidate && activeJob && (
+                <div className="p-16 text-center text-slate-400 text-xs sm:text-sm space-y-3">
+                  <p>Vị trí này chưa có ứng viên nào để hiển thị Workspace.</p>
+                  <button
+                    type="button"
+                    onClick={() => setUploadOpen(true)}
+                    className="px-4 py-2 bg-[#1E293B] text-white rounded-xl font-bold border border-[#60A5FA]/40"
+                  >
+                    + Nạp hồ sơ CV ngay
+                  </button>
+                </div>
+              )}
 
-            {activeTab === 'monthly' && (
-              <MonthlyCandidatesView currentUser={currentUser} />
-            )}
-          </>
-        )}
-      </main>
+              {/* Tab 4: Báo cáo Tuyển dụng theo tháng */}
+              {activeTab === 'monthly' && (
+                <MonthlyCandidatesView currentUser={currentUser} />
+              )}
+
+              {/* Tab 5: Nhật ký Hoạt động & Kiểm toán (Audit Logs) */}
+              {activeTab === 'audit' && activeJob && (
+                <DashboardView
+                  activeJob={activeJob}
+                  onSelectCandidateToWorkspace={handleSelectCandidateById}
+                  showAuditOnly={true}
+                />
+              )}
+
+              {/* Tab 6: Cài đặt & Thông tin HR */}
+              {activeTab === 'settings' && (
+                <div className="p-4 sm:p-6 max-w-3xl space-y-5">
+                  <div className="bg-[#161922] border border-[#242834] rounded-2xl p-5 shadow-xl space-y-4">
+                    <h2 className="text-base sm:text-lg font-bold text-white">Cài Đặt Hệ Thống & Phân Quyền HR</h2>
+                    <p className="text-xs text-slate-300">
+                      Thông tin tài khoản đang đăng nhập và chính sách bảo mật dữ liệu ứng viên.
+                    </p>
+
+                    <div className="p-4 bg-[#141720] rounded-xl border border-[#242834] space-y-3 text-xs">
+                      <div className="flex justify-between py-1 border-b border-[#242834]/80">
+                        <span className="text-slate-400">Họ và tên:</span>
+                        <strong className="text-white">{currentUser.full_name}</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-[#242834]/80">
+                        <span className="text-slate-400">Email:</span>
+                        <strong className="text-white">{currentUser.email}</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-[#242834]/80">
+                        <span className="text-slate-400">Vai trò RBAC:</span>
+                        <span className="px-2 py-0.5 rounded-full bg-[#064E3B] text-[#34D399] font-bold text-[10px]">
+                          {currentUser.role === 'ADMIN' ? 'QUẢN TRỊ VIÊN (ADMIN)' : 'NHÂN SỰ (RECRUITER)'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-400">Chế độ AI:</span>
+                        <span className="text-cyan-300 font-semibold">Human-in-the-loop (Minh bạch 100%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
       {/* Supabase Authentication Modal */}
       <AuthModal

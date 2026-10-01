@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Trophy,
   History,
-  Users,
-  CheckCircle2,
-  Clock,
-  Search,
-  Filter,
+  Sparkles,
   BarChart3,
   Award,
-  Sparkles,
 } from 'lucide-react';
 import { analyticsApi } from '../services/api';
-import type { CandidateRanking, AuditLog, Job } from '../types';
+import type { CandidateRanking, AuditLog, Job, GoogleSyncResult } from '../types';
+import { monthlyReportService } from '../services/monthlyReportService';
+import { DashboardHeader } from './dashboard/DashboardHeader';
+import { CandidateIngestionBar } from './dashboard/CandidateIngestionBar';
+import { DashboardMetricsCards } from './dashboard/DashboardMetricsCards';
+import { LiveScanProgressFeed, type ScanProgressItem } from './dashboard/LiveScanProgressFeed';
+import { RankingToolbar } from './dashboard/RankingToolbar';
+import { CandidateRankingTable } from './dashboard/CandidateRankingTable';
 
 interface DashboardViewProps {
   activeJob: Job;
@@ -29,7 +30,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [scoreFilter, setScoreFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [liveScanItems, setLiveScanItems] = useState<ScanProgressItem[]>([
+    {
+      id: 'scan-1',
+      sourceUrl: 'docs.google.com/document/d/sample-cv-screening-batch-01',
+      timestamp: '12:54:48',
+      status: 'SUCCESS',
+      badgeText: 'Thành công (+5 Hồ Sơ Mới)',
+    },
+    {
+      id: 'scan-2',
+      sourceUrl: 'google.com/docs/cv-frontend-dev-lead-2024',
+      timestamp: '10:42:15',
+      status: 'SUCCESS',
+      badgeText: 'Thành công (+12 CV Mới)',
+    },
+    {
+      id: 'scan-3',
+      sourceUrl: 'google.com/sheets/ats-candidates-batch-04',
+      timestamp: '10:38:00',
+      status: 'SCANNING',
+      badgeText: 'Đang quét AI',
+    },
+    {
+      id: 'scan-4',
+      sourceUrl: 'google.com/docs/designer-portfolio-links',
+      timestamp: '09:15:22',
+      status: 'ERROR',
+      badgeText: 'Lỗi kết nối URL',
+    },
+  ]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -53,11 +84,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [fetchData]);
 
   // Metrics KPI calculations
-  const totalApplicants = rankings.length;
+  const totalCount = rankings.length;
+  const passedCount = rankings.filter((r) => r.final_score >= 70).length;
+  const rejectedCount = rankings.filter((r) => r.final_score < 60).length;
+  const processingCount = rankings.filter((r) => r.final_score >= 60 && r.final_score < 70).length;
+  const passRate = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
   const highMatchCount = rankings.filter((r) => r.final_score >= 80).length;
-  const shortlistedCount = rankings.filter((r) => r.status === 'SHORTLISTED' || r.final_score >= 70).length;
-  const passRate = totalApplicants > 0 ? Math.round((shortlistedCount / totalApplicants) * 100) : 0;
-  const minutesSaved = totalApplicants * 15; // Ước tính tiết kiệm 15 phút mỗi CV
 
   // Filtered rankings
   const filteredRankings = useMemo(() => {
@@ -68,33 +100,63 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       if (!matchSearch) return false;
 
-      if (scoreFilter === 'high') return r.final_score >= 80;
-      if (scoreFilter === 'medium') return r.final_score >= 60 && r.final_score < 80;
-      if (scoreFilter === 'low') return r.final_score < 60;
+      if (statusFilter === 'passed') return r.final_score >= 70;
+      if (statusFilter === 'rejected') return r.final_score < 60;
+      if (statusFilter === 'review') return r.final_score >= 60 && r.final_score < 70;
       return true;
     });
-  }, [rankings, searchKeyword, scoreFilter]);
+  }, [rankings, searchKeyword, statusFilter]);
+
+  const handleSyncCompleted = (result: GoogleSyncResult) => {
+    // Thêm tiến trình quét vào feed
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0];
+    const newItem: ScanProgressItem = {
+      id: `scan-${Date.now()}`,
+      sourceUrl: result.sheet_title || 'Google Sheet / Form CV',
+      timestamp: timeStr,
+      status: result.success ? 'SUCCESS' : 'ERROR',
+      badgeText: result.success
+        ? `Thành công (+${result.newly_imported} Hồ Sơ Mới)`
+        : 'Lỗi đồng bộ nguồn',
+    };
+    setLiveScanItems((prev) => [newItem, ...prev.slice(0, 3)]);
+
+    // Làm mới danh sách ứng viên
+    void fetchData();
+  };
+
+  const handleApproveCandidate = async (candidateId: string) => {
+    try {
+      await monthlyReportService.updateApprovalStatus(candidateId, 'APPROVED');
+      void fetchData();
+    } catch (e) {
+      console.error('Lỗi khi duyệt ứng viên:', e);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="p-12 sm:p-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-3">
-        <Sparkles className="w-8 h-8 text-blue-400 animate-spin" />
-        <span>Đang tải số liệu Bảng xếp hạng & Phân tích tuyển dụng...</span>
+      <div className="p-16 text-center text-xs text-slate-300 flex flex-col items-center justify-center gap-3">
+        <Sparkles className="w-8 h-8 text-[#60A5FA] animate-spin" />
+        <span className="font-medium text-white">Đang tải số liệu Bảng Điều Khiển Tuyển Dụng AI...</span>
       </div>
     );
   }
 
+  // AUDIT LOGS VIEW (Giữ nguyên khi showAuditOnly === true)
   if (showAuditOnly) {
     return (
-      <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+      <div className="p-4 sm:p-6 space-y-5 w-full max-w-full overflow-x-hidden">
+        <div className="bg-[#161922] border border-[#242834] rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 sm:mb-6">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <History className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" /> Nhật ký Kiểm toán Hoạt động (Audit Trail Log)
+                <History className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                <span>Nhật ký Hoạt động & Kiểm toán (Audit Trail Log)</span>
               </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Ghi vết bất biến toàn bộ hành động chấm điểm AI và các can thiệp ghi đè (Override) từ HR để đảm bảo tính minh bạch.
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                Ghi vết bất biến toàn bộ hành động chấm điểm AI và các can thiệp ghi đè (Override) từ HR để đảm bảo tính minh bạch và trách nhiệm giải trình.
               </p>
             </div>
             <span className="px-3 py-1 bg-purple-500/10 text-purple-300 border border-purple-500/20 text-xs font-semibold rounded-full self-start sm:self-auto">
@@ -102,10 +164,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+          <div className="overflow-x-auto rounded-xl border border-[#242834]">
             <table className="w-full min-w-[640px] text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold bg-slate-950/80">
+                <tr className="border-b border-[#242834] text-slate-300 font-semibold bg-[#141720]">
                   <th className="p-3">Thời gian</th>
                   <th className="p-3">Tác tử (Actor)</th>
                   <th className="p-3">Hành động</th>
@@ -113,29 +175,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <th className="p-3">Lý do giải trình (Justification)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-[#242834]/80">
                 {auditLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">Chưa có bản ghi nhật ký audit nào.</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-400">
+                      Chưa có bản ghi nhật ký audit nào.
+                    </td>
                   </tr>
                 ) : (
                   auditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-800/40 text-slate-300 transition-colors">
-                      <td className="p-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                    <tr key={log.id} className="hover:bg-[#1A1E29] text-slate-200 transition-colors">
+                      <td className="p-3 font-mono text-[11px] text-slate-300 whitespace-nowrap">
                         {new Date(log.created_at).toLocaleString('vi-VN')}
                       </td>
-                      <td className="p-3 font-semibold text-cyan-400 whitespace-nowrap">{log.user_id || 'HR_RECRUITER'}</td>
+                      <td className="p-3 font-semibold text-cyan-300 whitespace-nowrap">
+                        {log.user_id || 'HR_RECRUITER'}
+                      </td>
                       <td className="p-3 whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          log.action === 'HR_SCORE_OVERRIDE'
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                        }`}>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            log.action === 'HR_SCORE_OVERRIDE'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : 'bg-[#1E293B] text-[#60A5FA] border border-[#60A5FA]/30'
+                          }`}
+                        >
                           {log.action}
                         </span>
                       </td>
-                      <td className="p-3 font-mono whitespace-nowrap">
-                        {log.old_value?.score ?? 'N/A'}% → <strong className="text-purple-400">{log.new_value?.score ?? 'N/A'}%</strong>
+                      <td className="p-3 font-mono whitespace-nowrap text-white">
+                        {log.old_value?.score ?? 'N/A'}% →{' '}
+                        <strong className="text-purple-300">{log.new_value?.score ?? 'N/A'}%</strong>
                       </td>
                       <td className="p-3 text-slate-200 max-w-sm">{log.justification || 'N/A'}</td>
                     </tr>
@@ -149,262 +218,110 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     );
   }
 
+  // MAIN DASHBOARD VIEW (Dark SaaS Enterprise, Crisp White Font, Clean Architecture)
   return (
     <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
-      {/* 4 Metric KPI Cards: 2 cards per row on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-blue-500/60 transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Tổng số CV</span>
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-              <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-            </div>
-          </div>
-          <div className="mt-2 sm:mt-3">
-            <span className="text-2xl sm:text-3xl font-black text-white">{totalApplicants}</span>
-            <span className="text-[10px] sm:text-xs text-blue-400 ml-1.5 font-medium">hồ sơ</span>
-          </div>
-          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Tự động che mờ PII</div>
-        </div>
+      {/* 1. Header */}
+      <DashboardHeader jobTitle={activeJob?.title} />
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/60 transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Đạt chuẩn</span>
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-            </div>
-          </div>
-          <div className="mt-2 sm:mt-3">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-400">{passRate}%</span>
-            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">({shortlistedCount}/{totalApplicants})</span>
-          </div>
-          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Điểm khớp ≥ 70%</div>
-        </div>
+      {/* 2. Ingestion Bar: Tiếp nhận hồ sơ ứng viên + Ai quét CV */}
+      <CandidateIngestionBar
+        jobId={activeJob.id}
+        onSyncCompleted={handleSyncCompleted}
+      />
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-cyan-500/60 transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Tiết kiệm</span>
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
-              <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-            </div>
-          </div>
-          <div className="mt-2 sm:mt-3">
-            <span className="text-2xl sm:text-3xl font-black text-cyan-400">~{minutesSaved}</span>
-            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">phút</span>
-          </div>
-          <div className="mt-1.5 text-[10px] text-slate-500 truncate">10 giây / CV</div>
-        </div>
+      {/* 3. 4 KPI Metrics Cards */}
+      <DashboardMetricsCards
+        totalCount={totalCount}
+        processingCount={processingCount}
+        passedCount={passedCount}
+        rejectedCount={rejectedCount}
+      />
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/80 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-xl relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">Top Tier</span>
-            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-              <Award className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-            </div>
-          </div>
-          <div className="mt-2 sm:mt-3">
-            <span className="text-2xl sm:text-3xl font-black text-purple-400">{highMatchCount}</span>
-            <span className="text-[10px] sm:text-xs text-slate-400 ml-1.5 font-medium">ứng viên</span>
-          </div>
-          <div className="mt-1.5 text-[10px] text-slate-500 truncate">Điểm khớp ≥ 80%</div>
-        </div>
-      </div>
+      {/* 4. Tiến Trình Quét AI Live */}
+      <LiveScanProgressFeed items={liveScanItems} />
 
-      {/* Funnel & Visual Analytics Bar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-        {/* Recruitment Funnel */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-blue-400" /> Phễu Tuyển dụng Tự động (Recruitment Funnel)
-          </h3>
-          <div className="space-y-2.5 pt-1">
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span className="truncate pr-2">1. Tiếp nhận hồ sơ qua PDF / Google Forms</span>
-                <strong className="shrink-0">{totalApplicants} (100%)</strong>
-              </div>
-              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full transition-all duration-700" style={{ width: '100%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span className="truncate pr-2">2. AI thẩm định & trích xuất bằng chứng</span>
-                <strong className="shrink-0">{totalApplicants} (100%)</strong>
-              </div>
-              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-cyan-500 rounded-full transition-all duration-700" style={{ width: '100%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span className="truncate pr-2">3. Ứng viên đạt tiêu chuẩn (≥ 70%)</span>
-                <strong className="shrink-0">{shortlistedCount} ({passRate}%)</strong>
-              </div>
-              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${passRate}%` }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-slate-300 mb-1">
-                <span className="truncate pr-2">4. Đề xuất phỏng vấn Top Tier (≥ 80%)</span>
-                <strong className="shrink-0">{highMatchCount} ({totalApplicants > 0 ? Math.round((highMatchCount / totalApplicants) * 100) : 0}%)</strong>
-              </div>
-              <div className="w-full h-2.5 sm:h-3 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-purple-500 rounded-full transition-all duration-700" style={{ width: `${totalApplicants > 0 ? (highMatchCount / totalApplicants) * 100 : 0}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Skills Summary Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" /> Tiêu chí Trọng tâm JD
-          </h3>
-          <p className="text-xs text-slate-400 truncate">
-            Vị trí: <strong className="text-cyan-400">{activeJob.title}</strong>
-          </p>
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
-              <span className="text-slate-400">Kỹ năng yêu cầu:</span>
-              <strong className="text-slate-200">{activeJob.criteria.required_skills.length} skills</strong>
-            </div>
-            <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
-              <span className="text-slate-400">Kinh nghiệm:</span>
-              <strong className="text-slate-200">{activeJob.criteria.min_years_experience}+ năm</strong>
-            </div>
-            <div className="flex justify-between p-2 bg-slate-800/60 rounded-xl">
-              <span className="text-slate-400">Học vấn:</span>
-              <strong className="text-slate-200 truncate max-w-[110px]">{activeJob.criteria.education_level}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Leaderboard Table Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      {/* 5. Bộ lọc & Bảng Xếp Hạng Ứng Viên */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-              <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" /> Bảng xếp hạng Ứng viên (Leaderboard)
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Sắp xếp tự động theo Điểm quyết định cuối cùng
+            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <Award className="w-4 h-4 text-[#60A5FA]" />
+              <span>Bảng Xếp Hạng Ứng Viên Tuyển Dụng</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Tự động phân loại dựa trên điểm tương thích AI & Quyết định thẩm định của HR
             </p>
           </div>
-
-          {/* Search & Filter Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto text-xs">
-            <div className="relative flex-1 sm:w-60">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                placeholder="Tìm ứng viên / file CV..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-blue-500 text-xs"
-              />
-            </div>
-
-            <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-xl px-2 py-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400 ml-1" />
-              <select
-                value={scoreFilter}
-                onChange={(e) => setScoreFilter(e.target.value as any)}
-                className="bg-transparent text-slate-300 text-xs py-1 px-1 focus:outline-none w-full"
-              >
-                <option value="all" className="bg-slate-800">Tất cả điểm</option>
-                <option value="high" className="bg-slate-800">Điểm cao (≥ 80%)</option>
-                <option value="medium" className="bg-slate-800">Điểm khá (60-79%)</option>
-                <option value="low" className="bg-slate-800">Điểm thấp (&lt; 60%)</option>
-              </select>
-            </div>
-          </div>
         </div>
 
-        {/* Table with horizontal swipe capability */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-800">
-          <table className="w-full min-w-[660px] text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold bg-slate-950/80">
-                <th className="p-3 text-center">Hạng</th>
-                <th className="p-3">Ứng viên (Bí danh)</th>
-                <th className="p-3 text-center">Kỹ năng</th>
-                <th className="p-3 text-center">Kinh nghiệm</th>
-                <th className="p-3 text-center">Học vấn</th>
-                <th className="p-3 text-center">Điểm AI</th>
-                <th className="p-3 text-center">Điểm Quyết định</th>
-                <th className="p-3 text-center">Trạng thái</th>
-                <th className="p-3 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80">
-              {filteredRankings.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="p-10 text-center text-slate-500">
-                    {searchKeyword || scoreFilter !== 'all'
-                      ? 'Không tìm thấy ứng viên phù hợp với bộ lọc.'
-                      : 'Chưa có ứng viên nào trong danh sách.'}
-                  </td>
-                </tr>
-              ) : (
-                filteredRankings.map((cand) => (
-                  <tr key={cand.candidate_id} className="hover:bg-slate-800/40 text-slate-300 transition-colors">
-                    <td className="p-3 text-center font-bold text-sm">
-                      {cand.rank === 1 ? (
-                        <span className="text-amber-400 font-black">🥇 #1</span>
-                      ) : cand.rank === 2 ? (
-                        <span className="text-slate-300 font-black">🥈 #2</span>
-                      ) : cand.rank === 3 ? (
-                        <span className="text-amber-600 font-black">🥉 #3</span>
-                      ) : (
-                        `#${cand.rank}`
-                      )}
-                    </td>
-                    <td className="p-3 font-bold text-white">
-                      {cand.masked_name}
-                      <span className="block text-[10px] text-slate-400 font-normal truncate max-w-[130px]">
-                        {cand.original_filename}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center font-mono">{cand.skills_score}%</td>
-                    <td className="p-3 text-center font-mono">{cand.experience_score}%</td>
-                    <td className="p-3 text-center font-mono">{cand.education_score}%</td>
-                    <td className="p-3 text-center font-mono text-blue-400">{cand.ai_score}%</td>
-                    <td className="p-3 text-center font-mono font-bold text-sm">
-                      <span className={cand.is_overridden ? 'text-purple-400' : 'text-emerald-400'}>
-                        {cand.final_score}%
-                      </span>
-                      {cand.is_overridden && (
-                        <span className="block text-[9px] text-purple-300 font-sans font-normal">(HR Override)</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        cand.status === 'SHORTLISTED' || cand.final_score >= 70
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                      }`}>
-                        {cand.status === 'SHORTLISTED' || cand.final_score >= 70 ? 'Phù hợp' : 'Xem xét'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => onSelectCandidateToWorkspace(cand.candidate_id)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all"
-                      >
-                        Mở đối soát ↗
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <RankingToolbar
+          searchKeyword={searchKeyword}
+          onSearchChange={setSearchKeyword}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+        />
+
+        <CandidateRankingTable
+          rankings={filteredRankings}
+          onSelectCandidateToWorkspace={onSelectCandidateToWorkspace}
+          onApproveCandidate={handleApproveCandidate}
+          jobTitle={activeJob?.title}
+        />
+      </div>
+
+      {/* 6. Recruitment Funnel (Phễu Tuyển dụng Tự động) */}
+      <div className="bg-[#161922] border border-[#242834] rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+        <h3 className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-[#60A5FA]" />
+          <span>Phễu Tuyển Dụng Tự Động (Recruitment Funnel)</span>
+        </h3>
+
+        <div className="space-y-2.5 pt-1">
+          <div>
+            <div className="flex justify-between text-xs text-slate-200 mb-1">
+              <span>1. Tiếp nhận hồ sơ qua PDF / Google Forms</span>
+              <strong className="text-white">{totalCount} (100%)</strong>
+            </div>
+            <div className="w-full h-2.5 bg-[#141720] rounded-full overflow-hidden border border-[#242834]">
+              <div className="h-full bg-[#60A5FA] rounded-full transition-all duration-700" style={{ width: '100%' }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs text-slate-200 mb-1">
+              <span>2. AI thẩm định & trích xuất bằng chứng</span>
+              <strong className="text-white">{totalCount} (100%)</strong>
+            </div>
+            <div className="w-full h-2.5 bg-[#141720] rounded-full overflow-hidden border border-[#242834]">
+              <div className="h-full bg-cyan-400 rounded-full transition-all duration-700" style={{ width: '100%' }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs text-slate-200 mb-1">
+              <span>3. Ứng viên đạt tiêu chuẩn (≥ 70%)</span>
+              <strong className="text-[#34D399]">{passedCount} ({passRate}%)</strong>
+            </div>
+            <div className="w-full h-2.5 bg-[#141720] rounded-full overflow-hidden border border-[#242834]">
+              <div className="h-full bg-[#34D399] rounded-full transition-all duration-700" style={{ width: `${passRate}%` }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs text-slate-200 mb-1">
+              <span>4. Đề xuất phỏng vấn Top Tier (≥ 80%)</span>
+              <strong className="text-purple-300">
+                {highMatchCount} ({totalCount > 0 ? Math.round((highMatchCount / totalCount) * 100) : 0}%)
+              </strong>
+            </div>
+            <div className="w-full h-2.5 bg-[#141720] rounded-full overflow-hidden border border-[#242834]">
+              <div
+                className="h-full bg-purple-500 rounded-full transition-all duration-700"
+                style={{ width: `${totalCount > 0 ? (highMatchCount / totalCount) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
