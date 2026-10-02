@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, MailX, RotateCcw, AlertCircle, ExternalLink } from 'lucide-react';
+import { X, MailX, RotateCcw, AlertCircle, ExternalLink, Send, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
 import type { UserProfile } from '../../services/supabase';
+import { isValidEmail, sanitizeEmail } from '../../utils/emailValidator';
 
 interface RejectionEmailModalProps {
   candidate: MonthlyCandidate;
@@ -73,6 +74,10 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
 
   const [isSending, setIsSending] = useState(false);
 
+  const [sentSuccess, setSentSuccess] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleReasonSelect = (reason: string) => {
     setRejectionReason(reason);
     setEmailBody(generateTemplate(candidateName, jobTitle, reason, senderName));
@@ -82,11 +87,16 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
     setEmailBody(generateTemplate(candidateName, jobTitle, rejectionReason, senderName));
   };
 
-  // Hành động duy nhất: Lưu trạng thái Loại vào Database và mở trực tiếp Gmail với nội dung điền sẵn 100%
-  const handleConfirmAndOpenGmail = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Mở trực tiếp Gmail với nội dung điền sẵn (Phương án dự phòng 1-Click)
+  const handleConfirmAndOpenGmail = async () => {
     if (!rejectionReason.trim()) {
       alert('Vui lòng chọn hoặc nhập lý do từ chối cụ thể!');
+      return;
+    }
+
+    const cleanEmail = sanitizeEmail(candidateEmail);
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage(`Địa chỉ email "${candidateEmail}" không hợp lệ! Vui lòng nhập đầy đủ địa chỉ có dấu @ và tên miền.`);
       return;
     }
 
@@ -102,7 +112,7 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
       );
 
       // 2. Mở trực tiếp Gmail với email, tiêu đề và nội dung thư từ chối điền sẵn
-      const encodedTo = encodeURIComponent(candidateEmail);
+      const encodedTo = encodeURIComponent(cleanEmail);
       const encodedSubject = encodeURIComponent(emailSubject);
       const encodedBody = encodeURIComponent(emailBody);
       const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodedTo}&su=${encodedSubject}&body=${encodedBody}`;
@@ -115,6 +125,7 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
       // 3. Cập nhật giao diện thành công và đóng modal
       onSuccess({
         ...candidate,
+        email: cleanEmail,
         approval_status: 'REJECTED',
         rejection_reason: rejectionReason.trim(),
         reviewed_by: senderName,
@@ -122,6 +133,57 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
     } catch (err: any) {
       console.error('Lỗi khi lưu loại hồ sơ:', err);
       alert('Không thể lưu trạng thái loại: ' + (err?.message || 'Lỗi kết nối'));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Gửi thư cảm ơn & từ chối tự động qua Server Webhook (Không cần mở tab Gmail)
+  const handleSendAuto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectionReason.trim()) {
+      alert('Vui lòng chọn hoặc nhập lý do từ chối cụ thể!');
+      return;
+    }
+
+    const cleanEmail = sanitizeEmail(candidateEmail);
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage(`Địa chỉ email "${candidateEmail}" không hợp lệ! Vui lòng nhập đầy đủ địa chỉ có dấu @ và tên miền.`);
+      return;
+    }
+
+    setIsSending(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await monthlyReportService.updateApprovalStatus(
+        candidate.id,
+        'REJECTED',
+        rejectionReason.trim(),
+        senderName,
+        true, // Kích hoạt gửi email tự động qua Webhook!
+        emailBody
+      );
+
+      if (res.email_sent) {
+        setSentSuccess(true);
+        setStatusMessage(res.email_message || `Đã gửi thư phản hồi từ chối đến ứng viên ${candidateName} qua Google Webhook!`);
+        setTimeout(() => {
+          onSuccess({
+            ...candidate,
+            email: cleanEmail,
+            approval_status: 'REJECTED',
+            rejection_reason: rejectionReason.trim(),
+            reviewed_by: senderName,
+          });
+        }, 1500);
+      } else {
+        // Webhook chưa gửi được
+        setErrorMessage(res.email_message || 'Máy chủ chưa kết nối được Webhook tự động.');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi gửi thư từ chối qua Webhook:', err);
+      setErrorMessage(err?.response?.data?.detail || err?.message || 'Lỗi kết nối máy chủ khi gửi thư.');
     } finally {
       setIsSending(false);
     }
@@ -152,9 +214,43 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
-          <form onSubmit={handleConfirmAndOpenGmail} className="space-y-4">
-            {/* Thông tin ứng viên */}
+        {sentSuccess ? (
+          <div className="p-10 text-center flex flex-col items-center justify-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 animate-bounce">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+            <h3 className="text-lg font-bold text-white">Đã Gửi Thư Phản Hồi!</h3>
+            <p className="text-sm text-slate-300 max-w-md">
+              {statusMessage || `Hệ thống đã lưu trạng thái và gửi thư phản hồi đến hòm thư ${candidateEmail}.`}
+            </p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleSendAuto} className="space-y-4">
+              {/* Warning / Error notice banner with 1-Click fallback */}
+              {errorMessage && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200 text-xs animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-white">Chưa thể gửi tự động từ máy chủ: </span>
+                      <span className="text-amber-200/90">{errorMessage}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConfirmAndOpenGmail}
+                    disabled={isSending}
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shrink-0 shadow-sm"
+                    title="Mở tab Gmail cá nhân điền sẵn 100% nội dung để bạn tự tay gửi"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Mở Gmail gửi ngay (1-Click)</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Thông tin ứng viên */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-400 mb-1">Tên ứng viên:</label>
@@ -272,28 +368,40 @@ Bộ phận Tuyển Dụng & Phát Triển Nhân Sự`;
               />
             </div>
 
-            {/* Nút hành động duy nhất màu xanh */}
-            <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-800">
+            {/* Nút hành động */}
+            <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-800">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 Hủy
               </button>
 
               <button
-                type="submit"
+                type="button"
+                onClick={handleConfirmAndOpenGmail}
                 disabled={isSending}
-                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white rounded-xl text-xs font-bold shadow-lg shadow-cyan-500/25 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-rose-300 hover:text-white border border-rose-500/30 hover:border-rose-500/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 title="Mở sẵn Gmail trên trình duyệt để gửi trực tiếp và lưu trạng thái loại vào hệ thống"
               >
-                <ExternalLink className="w-4 h-4" />
-                <span>{isSending ? 'Đang xử lý...' : 'Mở Gmail gửi ngay (1-Click)'}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Mở Gmail (1-Click)</span>
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSending}
+                className="px-5 py-2.5 bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 hover:from-rose-500 hover:to-pink-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/25 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                title="Gửi thư phản hồi từ chối tự động qua Webhook máy chủ"
+              >
+                <Send className="w-4 h-4" />
+                <span>{isSending ? 'Đang gửi...' : 'Gửi Tự Động (Webhook)'}</span>
               </button>
             </div>
           </form>
         </div>
+        )}
       </div>
     </div>
   );

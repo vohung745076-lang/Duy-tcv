@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Calendar, Users, CheckCircle2, XCircle, Clock, Search, Mail, Eye, RefreshCw, Trash2
+  Calendar, Users, CheckCircle2, XCircle, Clock, Search, Mail, Eye, RefreshCw, Trash2,
+  CheckSquare, Square
 } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
 import { candidateApi } from '../../services/api';
 import { EmailInviteModal } from './EmailInviteModal';
 import { RejectionEmailModal } from './RejectionEmailModal';
+import { BatchEmailInviteModal } from './BatchEmailInviteModal';
 import type { UserProfile } from '../../services/supabase';
 import { CandidateDetailDrawer } from './CandidateDetailDrawer';
 
@@ -26,10 +28,24 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modals
+  // Modals & Selection
   const [inspectCandidate, setInspectCandidate] = useState<MonthlyCandidate | null>(null);
   const [inviteCandidate, setInviteCandidate] = useState<MonthlyCandidate | null>(null);
   const [rejectCandidate, setRejectCandidate] = useState<MonthlyCandidate | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchModal, setShowBatchModal] = useState(false);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -109,6 +125,18 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
       return matchesStatus && matchesSearch;
     });
   }, [candidates, statusFilter, searchQuery]);
+
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === filteredCandidates.length && filteredCandidates.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCandidates.map((c) => c.id)));
+    }
+  };
+
+  const selectedCandidatesList = useMemo(() => {
+    return candidates.filter((c) => selectedIds.has(c.id));
+  }, [candidates, selectedIds]);
 
   const handleUpdateSuccess = (updated: MonthlyCandidate) => {
     setCandidates((prev) =>
@@ -281,6 +309,51 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
 
       {/* Candidates List / Cards */}
       <div className="space-y-3">
+        {/* Bulk Selection Bar */}
+        {!loading && filteredCandidates.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-900/60 border border-slate-800 rounded-2xl">
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+            >
+              {selectedIds.size === filteredCandidates.length ? (
+                <CheckSquare className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-500" />
+              )}
+              <span>
+                {selectedIds.size === filteredCandidates.length
+                  ? 'Bỏ chọn tất cả'
+                  : `Chọn tất cả (${filteredCandidates.length} ứng viên)`}
+              </span>
+            </button>
+
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-bold text-cyan-400">
+                  Đã chọn {selectedIds.size} ứng viên
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowBatchModal(true)}
+                  className="px-4 py-1.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Gửi Thư Mời Cho {selectedIds.size} Ứng Viên</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="p-12 text-center text-slate-400 text-xs flex flex-col items-center justify-center space-y-2">
             <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
@@ -294,10 +367,28 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
           filteredCandidates.map((candidate) => (
             <div
               key={candidate.id}
-              className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm"
+              className={`p-4 sm:p-5 rounded-3xl bg-slate-900/90 hover:bg-slate-900 border transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm ${
+                selectedIds.has(candidate.id)
+                  ? 'border-cyan-500/60 ring-1 ring-cyan-500/30'
+                  : 'border-slate-800 hover:border-slate-700'
+              }`}
             >
               {/* Left Candidate Info */}
               <div className="flex items-start gap-3.5">
+                {/* Checkbox */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleSelect(candidate.id)}
+                  className="mt-2 text-slate-500 hover:text-cyan-400 transition-colors shrink-0"
+                  title={selectedIds.has(candidate.id) ? "Bỏ chọn ứng viên này" : "Chọn ứng viên để gửi thư hàng loạt"}
+                >
+                  {selectedIds.has(candidate.id) ? (
+                    <CheckSquare className="w-5 h-5 text-cyan-400" />
+                  ) : (
+                    <Square className="w-5 h-5 text-slate-600 hover:text-slate-400" />
+                  )}
+                </button>
+
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-blue-600/30 to-cyan-500/20 border border-blue-500/30 flex items-center justify-center text-blue-300 font-bold text-base shrink-0">
                   {candidate.masked_name.charAt(0)}
                 </div>
@@ -441,6 +532,19 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
           currentUser={currentUser}
           onClose={() => setRejectCandidate(null)}
           onSuccess={handleUpdateSuccess}
+        />
+      )}
+
+      {/* Batch Email Invite Modal */}
+      {showBatchModal && selectedCandidatesList.length > 0 && (
+        <BatchEmailInviteModal
+          candidates={selectedCandidatesList}
+          currentUser={currentUser}
+          onClose={() => setShowBatchModal(false)}
+          onSuccess={() => {
+            setSelectedIds(new Set());
+            void loadCandidates();
+          }}
         />
       )}
     </div>

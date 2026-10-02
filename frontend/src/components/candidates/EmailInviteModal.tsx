@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText } from 'lucide-react';
+import { X, Mail, Video, Building2, Calendar, MapPin, Send, CheckCircle2, Edit3, RotateCcw, User, MessageSquareText, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService, type InterviewEmailPayload } from '../../services/monthlyReportService';
 import type { UserProfile } from '../../services/supabase';
+import { isValidEmail, sanitizeEmail } from '../../utils/emailValidator';
 
 interface EmailInviteModalProps {
   candidate: MonthlyCandidate;
@@ -81,6 +82,7 @@ Bộ phận Nhân sự & Tuyển dụng`;
   const [isSending, setIsSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleTypeChange = (type: 'ONLINE' | 'OFFLINE') => {
     setInterviewType(type);
@@ -95,19 +97,18 @@ Bộ phận Nhân sự & Tuyển dụng`;
     setEmailBody(generateStandardTemplate(candidateName, interviewType, interviewTime, location, interviewerName, customNotes, candidate.job_title));
   };
 
-  // Gửi thư mời phỏng vấn chuẩn mực và lưu lịch vào hệ thống
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (currentUser?.role === 'PENDING') {
-      alert(`Tài khoản (${currentUser.email}) hiện đang ở trạng thái 'Chờ Duyệt' trên Supabase. Vui lòng liên hệ Admin đổi ô role từ 'PENDING' thành 'RECRUITER' trên Supabase Dashboard để duyệt quyền gửi thư!`);
+  // Mở trực tiếp Gmail với nội dung điền sẵn (Phương án dự phòng 1-Click)
+  const handleOpenGmailDirect = async () => {
+    const cleanEmail = sanitizeEmail(candidateEmail);
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage(`Địa chỉ email "${candidateEmail}" không hợp lệ! Vui lòng nhập đầy đủ địa chỉ có dấu @ và tên miền (Ví dụ: ungvien@gmail.com hoặc mssv@domain.edu.vn).`);
       return;
     }
 
     setIsSending(true);
     try {
       const payload: InterviewEmailPayload = {
-        candidate_email: candidateEmail,
+        candidate_email: cleanEmail,
         candidate_name: candidateName,
         interview_type: interviewType,
         interview_time: interviewTime,
@@ -118,33 +119,94 @@ Bộ phận Nhân sự & Tuyển dụng`;
         email_body: emailBody,
       };
 
-      // 1. Lưu thông tin phỏng vấn vào hệ thống database
+      // Lưu thông tin phỏng vấn vào hệ thống database
       await monthlyReportService.scheduleInterviewOnly(candidate.id, payload);
 
-      // 2. Mở trực tiếp Gmail với đầy đủ người nhận, tiêu đề và nội dung đã điền sẵn 100%
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(candidateEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+      // Mở Gmail với nội dung soạn sẵn
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(cleanEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
       const openedWindow = window.open(gmailUrl, '_blank');
       if (!openedWindow || openedWindow.closed || typeof openedWindow.closed === 'undefined') {
-        window.location.href = `mailto:${encodeURIComponent(candidateEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        window.location.href = `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
       }
 
       setSentSuccess(true);
-      setStatusMessage(`Hệ thống đã phê duyệt hồ sơ và chuyển thư mời phỏng vấn đến hòm thư ${candidateEmail}.`);
+      setStatusMessage(`Hệ thống đã phê duyệt hồ sơ và mở tab Gmail soạn sẵn tới ${cleanEmail}. Vui lòng bấm 'Gửi' trong tab Gmail để hoàn tất!`);
       setTimeout(() => {
         onSuccess({
           ...candidate,
           masked_name: candidateName,
-          email: candidateEmail,
+          email: cleanEmail,
           approval_status: 'APPROVED',
           interview_type: interviewType,
           interview_time: interviewTime,
           interview_location: location,
           reviewed_by: interviewerName,
         });
-      }, 1200);
+      }, 1500);
     } catch (err: any) {
-      console.error('Lỗi lưu phỏng vấn:', err);
-      alert('Không thể lưu thông tin vào hệ thống. Vui lòng kiểm tra lại kết nối!');
+      console.error('Lỗi khi mở Gmail dự phòng:', err);
+      alert('Không thể lưu thông tin vào hệ thống: ' + (err?.message || 'Lỗi kết nối'));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Gửi thư mời phỏng vấn tự động qua Server Webhook (Không cần mở tab Gmail)
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (currentUser?.role === 'PENDING') {
+      alert(`Tài khoản (${currentUser.email}) hiện đang ở trạng thái 'Chờ Duyệt' trên Supabase. Vui lòng liên hệ Admin đổi ô role từ 'PENDING' thành 'RECRUITER' trên Supabase Dashboard để duyệt quyền gửi thư!`);
+      return;
+    }
+
+    const cleanEmail = sanitizeEmail(candidateEmail);
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMessage(`Địa chỉ email "${candidateEmail}" không hợp lệ! Vui lòng nhập đầy đủ địa chỉ có dấu @ và tên miền (Ví dụ: ungvien@gmail.com hoặc mssv@domain.edu.vn).`);
+      return;
+    }
+
+    setIsSending(true);
+    setErrorMessage(null);
+
+    try {
+      const payload: InterviewEmailPayload = {
+        candidate_email: cleanEmail,
+        candidate_name: candidateName,
+        interview_type: interviewType,
+        interview_time: interviewTime,
+        interview_location: location,
+        interviewer_name: interviewerName,
+        custom_notes: customNotes,
+        email_subject: emailSubject,
+        email_body: emailBody,
+      };
+
+      // GỌI TRỰC TIẾP sendInterviewEmail để kích hoạt Google Apps Script Webhook
+      const result = await monthlyReportService.sendInterviewEmail(candidate.id, payload);
+
+      if (result.success) {
+        setSentSuccess(true);
+        setStatusMessage(result.message || `Đã gửi thư mời phỏng vấn tự động thành công tới ${candidateEmail}!`);
+        setTimeout(() => {
+          onSuccess({
+            ...candidate,
+            masked_name: candidateName,
+            email: candidateEmail,
+            approval_status: 'APPROVED',
+            interview_type: interviewType,
+            interview_time: interviewTime,
+            interview_location: location,
+            reviewed_by: interviewerName,
+          });
+        }, 1500);
+      } else {
+        // Máy chủ báo chưa gửi được qua Webhook (chưa cài URL hoặc lỗi mạng)
+        setErrorMessage(result.message || 'Máy chủ chưa kết nối được Webhook tự động.');
+      }
+    } catch (err: any) {
+      console.error('Lỗi gửi mail phỏng vấn:', err);
+      setErrorMessage(err?.response?.data?.detail || err?.message || 'Không thể kết nối máy chủ gửi email.');
     } finally {
       setIsSending(false);
     }
@@ -196,6 +258,30 @@ Bộ phận Nhân sự & Tuyển dụng`;
                 <span>Tài khoản của bạn chưa được Admin cấp quyền chính thức. Nút gửi thư đã bị khóa để đảm bảo an toàn.</span>
               </div>
             )}
+
+            {/* Warning / Error notice banner with 1-Click fallback */}
+            {errorMessage && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200 text-xs animate-in fade-in duration-200">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-white">Chưa thể gửi tự động từ máy chủ: </span>
+                    <span className="text-amber-200/90">{errorMessage}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenGmailDirect}
+                  disabled={isSending}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shrink-0 shadow-sm"
+                  title="Mở tab Gmail cá nhân điền sẵn 100% nội dung để bạn tự tay gửi"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở Gmail gửi ngay (1-Click)</span>
+                </button>
+              </div>
+            )}
+
             {/* Candidate Name & Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -383,26 +469,36 @@ Bộ phận Nhân sự & Tuyển dụng`;
                 <span>Gửi trực tiếp đến: <strong className="text-slate-200">{candidateEmail}</strong></span>
               </div>
               
-              <div className="flex items-center justify-end gap-2.5 shrink-0">
+              <div className="flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                  className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all"
                 >
                   Hủy
                 </button>
                 <button
+                  type="button"
+                  onClick={handleOpenGmailDirect}
+                  disabled={isSending}
+                  className="px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-rose-300 hover:text-white border border-rose-500/30 hover:border-rose-500/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  title="Mở trực tiếp Gmail cá nhân của bạn với nội dung điền sẵn"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Mở Gmail (1-Click)</span>
+                </button>
+                <button
                   type="submit"
                   disabled={isSending || currentUser?.role === 'PENDING'}
-                  className={`px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all ${
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg flex items-center gap-2 transition-all ${
                     currentUser?.role === 'PENDING'
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                       : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white shadow-cyan-500/25 disabled:opacity-50'
                   }`}
-                  title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể gửi email' : 'Gửi Thư Mời Phỏng Vấn'}
+                  title={currentUser?.role === 'PENDING' ? 'Tài khoản đang chờ duyệt quyền, không thể gửi email' : 'Gửi Thư Mời Tự Động Qua Webhook'}
                 >
                   <Send className="w-4 h-4" />
-                  <span>{isSending ? 'Đang gửi...' : currentUser?.role === 'PENDING' ? 'Chờ Admin duyệt để gửi thư' : 'Gửi Thư Mời Phỏng Vấn'}</span>
+                  <span>{isSending ? 'Đang gửi...' : currentUser?.role === 'PENDING' ? 'Chờ Admin duyệt' : 'Gửi Tự Động (Webhook)'}</span>
                 </button>
               </div>
             </div>

@@ -136,20 +136,52 @@ export const GoogleSyncReconciliationModal: React.FC<GoogleSyncReconciliationMod
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {row.drive_url ? (
-                      <a
-                        href={row.drive_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] flex items-center gap-1 transition-colors shrink-0"
-                        title="Mở file trên Google Drive để kiểm tra trực tiếp"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Xem Drive</span>
-                      </a>
-                    ) : (
-                      <span className="text-slate-500 text-[11px]">Không có link</span>
-                    )}
+                    {(() => {
+                      const rawUrl = row.drive_url?.trim() || '';
+                      let driveHref: string | null = null;
+
+                      if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+                        driveHref = rawUrl;
+                      } else if (/^[a-zA-Z0-9_-]{25,55}$/.test(rawUrl)) {
+                        driveHref = `https://drive.google.com/file/d/${rawUrl}/view`;
+                      }
+
+                      if (driveHref) {
+                        return (
+                          <a
+                            href={driveHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0"
+                            title="Mở file trên Google Drive để kiểm tra trực tiếp"
+                          >
+                            <ExternalLink className="w-3 h-3 text-cyan-400" />
+                            <span>Xem Drive</span>
+                          </a>
+                        );
+                      }
+
+                      if (row.candidate_id) {
+                        return (
+                          <a
+                            href={`/api/v1/candidates/${row.candidate_id}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0"
+                            title="Xem file PDF đã tải về hệ thống"
+                          >
+                            <ExternalLink className="w-3 h-3 text-emerald-400" />
+                            <span>Xem PDF</span>
+                          </a>
+                        );
+                      }
+
+                      return (
+                        <span className="text-slate-500 text-[11px] italic px-1" title={rawUrl || 'Không có link'}>
+                          {rawUrl && rawUrl.length <= 20 ? rawUrl : 'Không có link Drive'}
+                        </span>
+                      );
+                    })()}
 
                     {/* Status Badge */}
                     {row.status === 'IMPORTED' && (

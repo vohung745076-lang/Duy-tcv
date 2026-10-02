@@ -17,10 +17,36 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
 
-    // Hỗ trợ trích xuất file PDF trực tiếp từ Google Drive của tài khoản
-    if (data.action === "fetch_drive_file" && data.fileId) {
+    // Hỗ trợ trích xuất file PDF trực tiếp từ Google Drive của tài khoản (theo File ID hoặc Tên file)
+    if (data.action === "fetch_drive_file" && (data.fileId || data.filename)) {
       try {
-        var file = DriveApp.getFileById(data.fileId);
+        var file = null;
+        if (data.fileId) {
+          try {
+            file = DriveApp.getFileById(data.fileId);
+          } catch (idErr) {
+            // Thử tiếp bằng tên nếu có
+            if (data.filename) {
+              var filesByName = DriveApp.getFilesByName(data.filename);
+              if (filesByName.hasNext()) {
+                file = filesByName.next();
+              }
+            }
+          }
+        } else if (data.filename) {
+          var filesByName = DriveApp.getFilesByName(data.filename);
+          if (filesByName.hasNext()) {
+            file = filesByName.next();
+          }
+        }
+
+        if (!file) {
+          return ContentService.createTextOutput(JSON.stringify({
+            success: false,
+            error: "Không tìm thấy file trên Google Drive (ID: " + (data.fileId || "") + ", Name: " + (data.filename || "") + ")"
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
         var blob = file.getBlob();
         return ContentService.createTextOutput(JSON.stringify({
           success: true,

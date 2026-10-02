@@ -24,10 +24,23 @@ export const CandidateIngestionBar: React.FC<CandidateIngestionBarProps> = ({
     setFeedback(null);
 
     try {
-      const result = await candidateApi.syncGoogleSheet(jobId, url.trim());
+      // Luôn kích hoạt autoEvaluate = true khi bấm nút 'Ai quét CV'
+      const result = await candidateApi.syncGoogleSheet(jobId, url.trim(), true);
+      
+      let msg = result.message;
+      if (!msg) {
+        if (result.newly_imported > 0) {
+          msg = `Đã tiếp nhận và tải về ${result.newly_imported} CV. Hệ thống AI đang tự động thẩm định và đưa vào danh sách HR xem xét.`;
+        } else if (result.duplicates_skipped > 0) {
+          msg = `Đã đối soát: ${result.duplicates_skipped} hồ sơ đã tồn tại sẵn trong hệ thống.`;
+        } else {
+          msg = 'Đã quét xong liên kết Google Sheet.';
+        }
+      }
+
       setFeedback({
         type: 'success',
-        message: result.message || `Đã tiếp nhận thành công ${result.newly_imported} hồ sơ từ liên kết!`,
+        message: msg,
       });
       setUrl('');
       onSyncCompleted(result);

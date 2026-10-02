@@ -175,6 +175,7 @@ export interface AuditLog {
   evaluation_id?: string;
   user_id?: string;
   action: string;
+  details?: string;
   old_value?: any;
   new_value?: any;
   justification?: string;

@@ -176,11 +176,23 @@ class EmailService:
                         "body": email_body or "",
                         "htmlBody": html_content
                     },
-                    timeout=10
+                    timeout=15,
+                    allow_redirects=True
                 )
                 if resp.status_code == 200:
-                    logger.info(f"Đã gửi email qua Google Webhook tới {to_email}")
-                    return True, f"Đã gửi email mời phỏng vấn thành công tới {to_email} qua Google Webhook!"
+                    try:
+                        res_json = resp.json()
+                        if res_json.get("success") is True or res_json.get("status") == "success":
+                            logger.info(f"Đã gửi email qua Google Webhook tới {to_email}")
+                            return True, f"Đã gửi email mời phỏng vấn thành công tới {to_email} qua Google Webhook!"
+                        elif res_json.get("error"):
+                            logger.warning(f"Google Webhook trả về lỗi: {res_json.get('error')}")
+                            return False, f"Google Webhook lỗi: {res_json.get('error')}"
+                    except Exception:
+                        logger.info(f"Đã gửi email qua Google Webhook tới {to_email} (HTTP 200)")
+                        return True, f"Đã gửi email mời phỏng vấn thành công tới {to_email} qua Google Webhook!"
+                else:
+                    logger.warning(f"Google Webhook phản hồi HTTP status: {resp.status_code}")
             except Exception as e:
                 logger.error(f"Lỗi gửi qua Google Webhook: {str(e)}")
 
@@ -198,14 +210,14 @@ class EmailService:
                     "subject": subject,
                     "htmlContent": html_content
                 }
-                resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=data, timeout=10)
+                resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=data, timeout=12)
                 if resp.status_code in [200, 201, 202]:
                     logger.info(f"Đã gửi email qua Brevo API tới {to_email}")
                     return True, f"Đã gửi email thành công qua Brevo API tới {to_email}!"
             except Exception as e:
                 logger.error(f"Lỗi gửi qua Brevo API: {str(e)}")
 
-        # 3. DỰ PHÒNG: Thử gửi trực tiếp qua SMTP với timeout ngắn 3s (nếu môi trường không bị chặn port 587)
+        # 3. DỰ PHÒNG: Thử gửi trực tiếp qua SMTP với timeout ngắn 4s (nếu môi trường không bị chặn port 587)
         if settings.SMTP_USER and settings.SMTP_PASSWORD:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
@@ -214,7 +226,7 @@ class EmailService:
             msg.attach(MIMEText(html_content, "html", "utf-8"))
 
             try:
-                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=3) as server:
+                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=4) as server:
                     server.starttls()
                     server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                     server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
@@ -223,7 +235,7 @@ class EmailService:
             except Exception as e:
                 logger.warning(f"SMTP trực tiếp không kết nối được (do Cloud chặn cổng 587/465): {str(e)}")
 
-        return False, "Máy chủ đám mây (Render Free) chặn cổng SMTP (587/465). Bạn vui lòng dùng nút 'Mở Gmail gửi ngay (1-Click)' trên giao diện để gửi trực tiếp từ Gmail!"
+        return False, "Máy chủ đám mây chưa cấu hình Webhook (EMAIL_WEBHOOK_URL) hoặc chặn cổng SMTP. Bạn có thể sử dụng nút 'Mở Gmail gửi ngay (1-Click)' trên giao diện để gửi trực tiếp!"
 
     def send_rejection_email(
         self,
@@ -259,11 +271,23 @@ class EmailService:
                         "body": custom_body or rejection_reason,
                         "htmlBody": html_content
                     },
-                    timeout=10
+                    timeout=15,
+                    allow_redirects=True
                 )
                 if resp.status_code == 200:
-                    logger.info(f"Đã gửi email từ chối qua Google Webhook tới {to_email}")
-                    return True, f"Đã gửi thư phản hồi từ chối thành công tới {to_email} qua Google Webhook!"
+                    try:
+                        res_json = resp.json()
+                        if res_json.get("success") is True or res_json.get("status") == "success":
+                            logger.info(f"Đã gửi email từ chối qua Google Webhook tới {to_email}")
+                            return True, f"Đã gửi thư phản hồi từ chối thành công tới {to_email} qua Google Webhook!"
+                        elif res_json.get("error"):
+                            logger.warning(f"Google Webhook lỗi khi gửi thư từ chối: {res_json.get('error')}")
+                            return False, f"Google Webhook lỗi: {res_json.get('error')}"
+                    except Exception:
+                        logger.info(f"Đã gửi email từ chối qua Google Webhook tới {to_email} (HTTP 200)")
+                        return True, f"Đã gửi thư phản hồi từ chối thành công tới {to_email} qua Google Webhook!"
+                else:
+                    logger.warning(f"Google Webhook phản hồi HTTP status: {resp.status_code}")
             except Exception as e:
                 logger.error(f"Lỗi gửi email từ chối qua Google Webhook: {str(e)}")
 

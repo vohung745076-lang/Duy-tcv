@@ -80,7 +80,7 @@ export const CandidateUploadModal: React.FC<CandidateUploadModalProps> = ({
     setIsUploading(true);
     try {
       const jobId = activeJob ? activeJob.id : '';
-      const result = await candidateApi.syncGoogleSheet(jobId, googleSheetUrl.trim());
+      const result = await candidateApi.syncGoogleSheet(jobId, googleSheetUrl.trim(), true);
       setSyncResult(result);
       setSyncSuccess(true);
       if (result.candidates && result.candidates.length > 0) {

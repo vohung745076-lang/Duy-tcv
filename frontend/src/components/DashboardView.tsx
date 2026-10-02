@@ -31,36 +31,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [liveScanItems, setLiveScanItems] = useState<ScanProgressItem[]>([
-    {
-      id: 'scan-1',
-      sourceUrl: 'docs.google.com/document/d/sample-cv-screening-batch-01',
-      timestamp: '12:54:48',
-      status: 'SUCCESS',
-      badgeText: 'Thành công (+5 Hồ Sơ Mới)',
-    },
-    {
-      id: 'scan-2',
-      sourceUrl: 'google.com/docs/cv-frontend-dev-lead-2024',
-      timestamp: '10:42:15',
-      status: 'SUCCESS',
-      badgeText: 'Thành công (+12 CV Mới)',
-    },
-    {
-      id: 'scan-3',
-      sourceUrl: 'google.com/sheets/ats-candidates-batch-04',
-      timestamp: '10:38:00',
-      status: 'SCANNING',
-      badgeText: 'Đang quét AI',
-    },
-    {
-      id: 'scan-4',
-      sourceUrl: 'google.com/docs/designer-portfolio-links',
-      timestamp: '09:15:22',
-      status: 'ERROR',
-      badgeText: 'Lỗi kết nối URL',
-    },
-  ]);
+  const [liveScanItems, setLiveScanItems] = useState<ScanProgressItem[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -69,8 +40,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const logs = await analyticsApi.getAuditLogs();
         setAuditLogs(logs);
       } else {
-        const res = await analyticsApi.getRanking(activeJob.id);
+        const [res, logs] = await Promise.all([
+          analyticsApi.getRanking(activeJob.id),
+          analyticsApi.getAuditLogs().catch(() => [] as AuditLog[]),
+        ]);
         setRankings(res.rankings);
+
+        // Nạp các tiến trình đồng bộ thật từ AuditLog nếu có
+        const syncLogs = logs
+          .filter((l) => l.action === 'SYNC_GOOGLE_SHEET')
+          .slice(0, 4)
+          .map((l, index) => {
+            const timeStr = l.created_at ? new Date(l.created_at).toTimeString().split(' ')[0] : 'Gần đây';
+            return {
+              id: l.id || `sync-log-${index}`,
+              sourceUrl: 'Google Sheets / Form CV',
+              timestamp: timeStr,
+              status: 'SUCCESS' as const,
+              badgeText: l.details || 'Đồng bộ Google Sheet thành công',
+            };
+          });
+
+        if (syncLogs.length > 0) {
+          setLiveScanItems((prev) => (prev.length === 0 ? syncLogs : prev));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch analytics:', err);

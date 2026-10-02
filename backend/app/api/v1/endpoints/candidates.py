@@ -1,7 +1,7 @@
 import os
 import shutil
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, BackgroundTasks
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -17,6 +17,7 @@ from app.services.pdf_service import pdf_service
 from app.services.pii_service import pii_service
 from app.services.storage_service import storage_service
 from app.services.google_sync_service import google_sync_service
+from app.services.evaluation_flow import batch_evaluate_candidates
 
 router = APIRouter()
 
@@ -124,22 +125,46 @@ async def upload_candidates(
 def sync_google_sheet(
     job_id: str,
     payload: GoogleSyncRequestSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
 ):
     """Đồng bộ ứng viên từ Google Sheet liên kết Google Form, tải CV từ Google Drive và đối soát."""
     try:
+        # 1. Đọc sheet, tải CV và đối soát trùng lặp
         result = google_sync_service.sync_and_reconcile(
             job_id=job_id,
             sheet_url=payload.sheet_url,
-            db=db
+            db=db,
+            auto_evaluate=False # Quản lý evaluate linh hoạt bên dưới
         )
+
+        ready_ids = result.get("ready_candidate_ids", [])
+
+        # 2. Tự động kích hoạt AI chấm điểm nếu được yêu cầu (mặc định cho luồng quét CV)
+        if payload.auto_evaluate and ready_ids:
+            if len(ready_ids) <= 2:
+                # Nếu số lượng ít (1-2 hồ sơ): Chấm điểm trực tiếp ngay để trả về kết quả cho HR xem xét
+                batch_evaluate_candidates(ready_ids, job_id, performed_by=current_user.email)
+                # Refresh lại danh sách ứng viên trong response
+                for c in result.get("candidates", []):
+                    db.refresh(c)
+                result["message"] += f" Đã hoàn thành AI thẩm định {len(ready_ids)} hồ sơ theo tiêu chí JD."
+            else:
+                # Nếu số lượng lớn (ví dụ 10-100 form): Đưa vào background task để không gây nghẽn kết nối
+                background_tasks.add_task(
+                    batch_evaluate_candidates,
+                    ready_ids,
+                    job_id,
+                    current_user.email
+                )
+                result["message"] += f" Đang tự động kích hoạt AI chấm điểm ngầm cho {len(ready_ids)} hồ sơ..."
 
         try:
             audit = AuditLog(
                 action="SYNC_GOOGLE_SHEET",
                 performed_by=current_user.email,
-                details=f"Đồng bộ Google Sheet: {result['total_rows']} dòng, {result['newly_imported']} mới, {result['duplicates_skipped']} trùng lặp."
+                details=f"Đồng bộ Google Sheet: {result['total_rows']} dòng, {result['newly_imported']} mới, {result['duplicates_skipped']} trùng lặp. Sẵn sàng AI: {len(ready_ids)}."
             )
             db.add(audit)
             db.commit()
