@@ -143,4 +143,47 @@ class PDFService:
 
         return normalized
 
+    @classmethod
+    def create_pdf_from_text(cls, title: str, text: str) -> bytes:
+        """
+        Tạo luồng byte PDF tiêu chuẩn từ văn bản thuần túy (hỗ trợ đầy đủ tiếng Việt có dấu qua PyMuPDF Story).
+        Được dùng làm fallback khi hồ sơ gốc là DOCX hoặc file PDF bị thiếu/hỏng.
+        """
+        import io
+        import html
+        try:
+            import pymupdf
+            bio = io.BytesIO()
+            writer = pymupdf.DocumentWriter(bio)
+            safe_title = html.escape(title or "Hồ sơ ứng viên")
+            safe_text = html.escape(text or "Không có nội dung văn bản.")
+            html_content = (
+                '<html><body style="font-family: sans-serif; padding: 12px; color: #1e293b;">'
+                '<div style="border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-bottom: 16px;">'
+                f'<h2 style="color: #1e3a8a; margin: 0 0 4px 0;">{safe_title}</h2>'
+                '<span style="font-size: 11px; color: #64748b;">Bản chuyển đổi PDF xem trực tiếp từ văn bản CV</span>'
+                '</div>'
+                f'<pre style="font-family: sans-serif; font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">{safe_text}</pre>'
+                '</body></html>'
+            )
+            story = pymupdf.Story(html=html_content)
+            more = 1
+            while more:
+                device = writer.begin_page(pymupdf.Rect(0, 0, 595, 842))
+                more, _ = story.place(pymupdf.Rect(40, 40, 555, 802))
+                story.draw(device)
+                writer.end_page()
+            writer.close()
+            return bio.getvalue()
+        except Exception as e:
+            logger.error(f"Lỗi khi tạo PDF từ văn bản: {e}")
+            try:
+                import pymupdf
+                doc = pymupdf.open()
+                page = doc.new_page(width=595, height=842)
+                page.insert_textbox(pymupdf.Rect(40, 40, 555, 802), f"{title}\n\n{text[:2000]}")
+                return doc.tobytes()
+            except Exception:
+                return b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R>>endobj\nxref\n0 4\n0000000000 65535 f\n0000000009 00000 n\n0000000052 00000 n\n0000000101 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n178\n%%EOF"
+
 pdf_service = PDFService()

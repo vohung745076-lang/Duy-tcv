@@ -1,5 +1,7 @@
 import os
 import shutil
+import re
+import urllib.parse
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, BackgroundTasks
 from fastapi.responses import FileResponse, Response
@@ -205,14 +207,37 @@ def get_candidate_pdf(
     resolved_path = resolve_candidate_file_path(candidate.file_path)
     pdf_bytes, source = storage_service.get_pdf_bytes(db, candidate_id=candidate.id, local_path=resolved_path)
 
-    if not pdf_bytes:
-        raise HTTPException(status_code=404, detail="File PDF không tồn tại.")
+    # Nếu không có bytes hoặc file không phải là PDF chuẩn (ví dụ file DOCX gốc b"PK\x03\x04..."),
+    # tự động chuyển đổi sang PDF chuẩn từ text bóc tách (raw_text hoặc masked_text)
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+        candidate_text = candidate.raw_text or candidate.masked_text
+        if candidate_text and len(candidate_text.strip()) > 0:
+            title = f"Hồ sơ ứng viên: {candidate.masked_name or candidate.original_filename or 'Ứng viên'}"
+            pdf_bytes = pdf_service.create_pdf_from_text(title=title, text=candidate_text)
+        elif not pdf_bytes:
+            raise HTTPException(status_code=404, detail="File PDF không tồn tại.")
+
+    # Chuẩn hóa tên file theo chuẩn RFC 5987 / RFC 6266
+    # FastAPI/Starlette chỉ cho phép ký tự latin-1 (ASCII) trong trường filename tiêu chuẩn.
+    # Tên tiếng Việt có dấu được mã hóa qua filename*=UTF-8''... để tương thích đa trình duyệt và tránh lỗi 500 Internal Server Error.
+    raw_name = candidate.original_filename or f"candidate_{candidate_id[:8]}.pdf"
+    if not raw_name.lower().endswith(".pdf"):
+        base_part = os.path.splitext(raw_name)[0]
+        raw_name = f"{base_part}.pdf"
+
+    ascii_filename = re.sub(r'[^a-zA-Z0-9\._-]', '_', raw_name)
+    if not ascii_filename.lower().endswith(".pdf"):
+        ascii_filename += ".pdf"
+
+    utf8_filename = urllib.parse.quote(raw_name)
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"inline; filename=\"{candidate.original_filename}\""
+            "Content-Disposition": f'inline; filename="{ascii_filename}"; filename*=UTF-8\'\'{utf8_filename}',
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Disposition",
         }
     )
 
