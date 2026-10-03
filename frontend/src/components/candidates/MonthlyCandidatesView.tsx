@@ -43,7 +43,12 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
       await monthlyReportService.exportMonthlyExcel(monthParam, selectedYear, statusFilter);
     } catch (err: any) {
       console.error('Lỗi khi xuất file Excel:', err);
-      alert('Không thể xuất file Excel: ' + (err?.response?.data?.detail || err?.message || 'Lỗi hệ thống'));
+      const status = err?.response?.status;
+      if (status === 404) {
+        alert('Máy chủ Render đang trong quá trình cập nhật phiên bản mới. Vui lòng đợi 1-2 phút rồi bấm lại nhé!');
+      } else {
+        alert('Không thể xuất file Excel: ' + (err?.response?.data?.detail || err?.message || 'Lỗi hệ thống'));
+      }
     } finally {
       setExporting(false);
     }
