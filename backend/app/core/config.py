@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Ban Tuyển dụng Nhân sự")
 
     # Cấu hình gửi Email qua HTTPS API / Webhook (vượt qua firewall chặn SMTP của Cloud)
-    EMAIL_WEBHOOK_URL: str = os.getenv("EMAIL_WEBHOOK_URL", "")
+    EMAIL_WEBHOOK_URL: str = os.getenv(
+        "EMAIL_WEBHOOK_URL",
+        "https://script.google.com/macros/s/AKfycbwgXhSpAULF4-pD-wuoy7YRMVPDMj8PAm7b4iwVTPf6wu2EFpTanJiBoYl7k4nI-L9iDA/exec"
+    )
     BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
 
     model_config = SettingsConfigDict(
