@@ -83,6 +83,20 @@ export const candidateApi = {
     const base = `${API_BASE_URL}/candidates/${candidateId}/pdf`;
     return token ? `${base}?token=${encodeURIComponent(token)}` : base;
   },
+  downloadPdf: async (candidateId: string, filename?: string): Promise<void> => {
+    const response = await apiClient.get(`/candidates/${candidateId}/pdf`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.setAttribute('download', filename ? (filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`) : `CV_${candidateId.slice(0, 8)}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
   delete: async (candidateId: string): Promise<{ message: string; deleted_id: string }> => {
     const response = await apiClient.delete(`/candidates/${candidateId}`);
     return response.data;

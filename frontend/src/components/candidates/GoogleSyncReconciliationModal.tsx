@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -8,9 +8,12 @@ import {
   Copy,
   FolderLock,
   ArrowRight,
+  Download,
+  Loader2,
   X
 } from 'lucide-react';
 import type { GoogleSyncResult } from '../../types';
+import { candidateApi } from '../../services/api';
 
 interface GoogleSyncReconciliationModalProps {
   isOpen: boolean;
@@ -25,10 +28,24 @@ export const GoogleSyncReconciliationModal: React.FC<GoogleSyncReconciliationMod
   onClose,
   onStartEvaluation,
 }) => {
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   if (!isOpen || !result) return null;
 
   const hasImported = result.newly_imported > 0;
   const hasPermissionIssues = result.permission_issues > 0;
+
+  const handleDownloadPdf = async (candidateId: string, name: string) => {
+    setDownloadingId(candidateId);
+    try {
+      await candidateApi.downloadPdf(candidateId, `${name}_CV.pdf`);
+    } catch (err) {
+      console.error('Lỗi khi tải file CV:', err);
+      alert('Không thể tải file CV về máy. Vui lòng kiểm tra lại quyền truy cập hoặc phiên làm việc.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4">
@@ -146,40 +163,44 @@ export const GoogleSyncReconciliationModal: React.FC<GoogleSyncReconciliationMod
                         driveHref = `https://drive.google.com/file/d/${rawUrl}/view`;
                       }
 
-                      if (driveHref) {
-                        return (
-                          <a
-                            href={driveHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0"
-                            title="Mở file trên Google Drive để kiểm tra trực tiếp"
-                          >
-                            <ExternalLink className="w-3 h-3 text-cyan-400" />
-                            <span>Xem Drive</span>
-                          </a>
-                        );
-                      }
-
-                      if (row.candidate_id) {
-                        return (
-                          <a
-                            href={`/api/v1/candidates/${row.candidate_id}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0"
-                            title="Xem file PDF đã tải về hệ thống"
-                          >
-                            <ExternalLink className="w-3 h-3 text-emerald-400" />
-                            <span>Xem PDF</span>
-                          </a>
-                        );
-                      }
-
                       return (
-                        <span className="text-slate-500 text-[11px] italic px-1" title={rawUrl || 'Không có link'}>
-                          {rawUrl && rawUrl.length <= 20 ? rawUrl : 'Không có link Drive'}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {driveHref && (
+                            <a
+                              href={driveHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0"
+                              title="Mở file trên Google Drive để kiểm tra trực tiếp"
+                            >
+                              <ExternalLink className="w-3 h-3 text-cyan-400" />
+                              <span>Mở Drive</span>
+                            </a>
+                          )}
+
+                          {row.candidate_id && (
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadPdf(row.candidate_id!, row.name)}
+                              disabled={downloadingId === row.candidate_id}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                              title="Tải file PDF CV đã lưu về máy tính"
+                            >
+                              {downloadingId === row.candidate_id ? (
+                                <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
+                              ) : (
+                                <Download className="w-3 h-3 text-emerald-400" />
+                              )}
+                              <span>{downloadingId === row.candidate_id ? 'Đang tải...' : 'Tải CV về'}</span>
+                            </button>
+                          )}
+
+                          {!driveHref && !row.candidate_id && (
+                            <span className="text-slate-500 text-[11px] italic px-1" title={rawUrl || 'Không có link'}>
+                              {rawUrl && rawUrl.length <= 20 ? rawUrl : 'Không có link Drive'}
+                            </span>
+                          )}
+                        </div>
                       );
                     })()}
 
