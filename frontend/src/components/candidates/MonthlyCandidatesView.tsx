@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, Users, CheckCircle2, XCircle, Clock, Search, Mail, Eye, RefreshCw, Trash2,
-  CheckSquare, Square
+  CheckSquare, Square, FileSpreadsheet
 } from 'lucide-react';
 import type { MonthlyCandidate } from '../../types';
 import { monthlyReportService } from '../../services/monthlyReportService';
@@ -34,6 +34,20 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
   const [rejectCandidate, setRejectCandidate] = useState<MonthlyCandidate | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const monthParam = selectedMonth === 'ALL' ? undefined : selectedMonth;
+      await monthlyReportService.exportMonthlyExcel(monthParam, selectedYear, statusFilter);
+    } catch (err: any) {
+      console.error('Lỗi khi xuất file Excel:', err);
+      alert('Không thể xuất file Excel: ' + (err?.response?.data?.detail || err?.message || 'Lỗi hệ thống'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -220,50 +234,63 @@ export const MonthlyCandidatesView: React.FC<MonthlyCandidatesViewProps> = ({ cu
           </div>
         </div>
 
-        {/* Status Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800/80">
+        {/* Status Filter Tabs & Export Excel Button on the right */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              Tất cả ({stats.total})
+            </button>
+            <button
+              onClick={() => setStatusFilter('PENDING')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'PENDING'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
+                  : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              Chờ HR duyệt ({stats.pending})
+            </button>
+            <button
+              onClick={() => setStatusFilter('APPROVED')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'APPROVED'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                  : 'text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              Đã duyệt phỏng vấn ({stats.approved})
+            </button>
+            <button
+              onClick={() => setStatusFilter('REJECTED')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'REJECTED'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
+                  : 'text-rose-400/80 hover:text-rose-300 hover:bg-rose-500/10'
+              }`}
+            >
+              <XCircle className="w-3 h-3" />
+              Đã bị loại ({stats.rejected})
+            </button>
+          </div>
+
+          {/* Góc phải của ảnh: Nút Xuất Báo Cáo Excel */}
           <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              statusFilter === 'ALL'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Xuất toàn bộ danh sách ứng viên theo tháng ra file Excel (.xlsx)"
           >
-            Tất cả ({stats.total})
-          </button>
-          <button
-            onClick={() => setStatusFilter('PENDING')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              statusFilter === 'PENDING'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
-                : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10'
-            }`}
-          >
-            <Clock className="w-3 h-3" />
-            Chờ HR duyệt ({stats.pending})
-          </button>
-          <button
-            onClick={() => setStatusFilter('APPROVED')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              statusFilter === 'APPROVED'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-500/10'
-            }`}
-          >
-            <CheckCircle2 className="w-3 h-3" />
-            Đã duyệt phỏng vấn ({stats.approved})
-          </button>
-          <button
-            onClick={() => setStatusFilter('REJECTED')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              statusFilter === 'REJECTED'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-500/20'
-                : 'text-rose-400/80 hover:text-rose-300 hover:bg-rose-500/10'
-            }`}
-          >
-            <XCircle className="w-3 h-3" />
-            Đã bị loại ({stats.rejected})
+            <FileSpreadsheet className={`w-3.5 h-3.5 ${exporting ? 'animate-bounce' : ''}`} />
+            <span>{exporting ? 'Đang xuất Excel...' : 'Xuất Báo Cáo Excel'}</span>
           </button>
         </div>
       </div>

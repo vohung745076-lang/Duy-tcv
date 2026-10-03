@@ -98,4 +98,30 @@ export const monthlyReportService = {
     const response = await apiClient.post('/monthly/candidates/batch-send-interview', payload);
     return response.data;
   },
+
+  exportMonthlyExcel: async (month?: number, year?: number, statusFilter?: string): Promise<void> => {
+    const params: Record<string, string | number> = {};
+    if (month) params.month = month;
+    if (year) params.year = year;
+    if (statusFilter && statusFilter !== 'ALL') params.status_filter = statusFilter;
+
+    const response = await apiClient.get('/monthly/candidates/export-excel', {
+      params,
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    const periodStr = month && year ? `Thang_${month}_${year}` : (year ? `Nam_${year}` : 'Tat_Ca_Thang');
+    link.setAttribute('download', `Bao_Cao_Ung_Vien_${periodStr}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };

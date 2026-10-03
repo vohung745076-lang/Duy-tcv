@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+import urllib.parse
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,7 @@ from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.job import JobDescription
 from app.services.email_service import email_service
+from app.services.excel_export_service import excel_export_service
 
 router = APIRouter()
 
@@ -109,6 +111,48 @@ def get_monthly_candidates(
         })
 
     return result
+
+
+@router.get("/candidates/export-excel")
+def export_monthly_candidates_excel(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_role(["ADMIN", "RECRUITER"])),
+):
+    """
+    Xuất danh sách ứng viên theo tháng ra file Excel (.xlsx) chuẩn.
+    Bao gồm tên, vị trí, điểm AI, trạng thái tuyển dụng, tình trạng email (mời PV / từ chối / loại), lý do loại, người duyệt.
+    """
+    candidates_list = get_monthly_candidates(month=month, year=year, db=db, current_user=current_user)
+
+    if status_filter and status_filter.upper() != "ALL":
+        candidates_list = [
+            c for c in candidates_list
+            if (c.get("approval_status") or "PENDING").upper() == status_filter.upper()
+        ]
+
+    excel_bytes = excel_export_service.generate_monthly_candidates_excel(
+        candidates_data=candidates_list,
+        month=month,
+        year=year,
+    )
+
+    period_filename = f"Thang_{month}_{year}" if month and year else (f"Nam_{year}" if year else "Tat_Ca_Thang")
+    ascii_filename = f"Bao_Cao_Ung_Vien_{period_filename}.xlsx"
+    utf8_filename = urllib.parse.quote(f"Báo_Cáo_Ứng_Viên_{period_filename}.xlsx")
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{utf8_filename}',
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
 
 @router.patch("/candidates/{candidate_id}/approval")
 def update_candidate_approval(
