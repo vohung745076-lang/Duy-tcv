@@ -51,12 +51,15 @@
 }
 
 /* Smooth Scrollbar & No-Scrollbar */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* Dark mode autofill fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #0D0D0D inset !important;
+  -webkit-text-fill-color: #F4F4F5 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #F4F4F5;
 }
 
 /* Custom scrollbar for data tables and panels */
