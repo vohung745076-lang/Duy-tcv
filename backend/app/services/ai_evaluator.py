@@ -109,9 +109,17 @@ class AIEvaluatorService:
         api_key = settings.GEMINI_API_KEY
         if api_key:
             try:
+                # Chuẩn hóa loại bỏ số thứ tự thừa trong danh sách kỹ năng
+                clean_criteria = dict(criteria)
+                clean_criteria["required_skills"] = [
+                    semantic_matcher.clean_skill_name(s) for s in criteria.get("required_skills", [])
+                ]
+                clean_criteria["preferred_skills"] = [
+                    semantic_matcher.clean_skill_name(s) for s in criteria.get("preferred_skills", [])
+                ]
                 prompt = f"""
                 [JOB TITLE]: {job_title}
-                [CRITERIA]: {json.dumps(criteria, ensure_ascii=False, indent=2)}
+                [CRITERIA]: {json.dumps(clean_criteria, ensure_ascii=False, indent=2)}
                 
                 [MASKED CV TEXT]:
                 {clean_cv_text}
@@ -203,37 +211,39 @@ class AIEvaluatorService:
         matched_count = 0
         missing_skills = []
 
-        for skill in req_skills:
-            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, skill)
+        for raw_skill in req_skills:
+            clean_skill = semantic_matcher.clean_skill_name(raw_skill) or raw_skill.strip()
+            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, clean_skill)
             if is_matched:
                 matched_count += 1
                 if not quote:
                     quote = f"Kỹ năng '{matched_part}' xuất hiện trong hồ sơ ứng viên."
                 skills_evidence.append({
-                    "criterion": f"Kỹ năng bắt buộc: {skill}",
+                    "criterion": f"Kỹ năng bắt buộc: {clean_skill}",
                     "matched": True,
                     "score": 100.0,
                     "raw_quote": quote,
                     "explanation": f"Tìm thấy bằng chứng ứng dụng kỹ năng '{matched_part}' trong CV."
                 })
             else:
-                missing_skills.append(skill)
+                missing_skills.append(clean_skill)
                 skills_evidence.append({
-                    "criterion": f"Kỹ năng bắt buộc: {skill}",
+                    "criterion": f"Kỹ năng bắt buộc: {clean_skill}",
                     "matched": False,
                     "score": 0.0,
                     "raw_quote": "",
-                    "explanation": f"Không tìm thấy dữ liệu về kỹ năng '{skill}' trong CV."
+                    "explanation": f"Không tìm thấy dữ liệu về kỹ năng '{clean_skill}' trong CV."
                 })
 
         # 2. ĐỐI SOÁT KỸ NĂNG ƯU TIÊN
-        for skill in pref_skills:
-            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, skill)
+        for raw_skill in pref_skills:
+            clean_skill = semantic_matcher.clean_skill_name(raw_skill) or raw_skill.strip()
+            is_matched, matched_part, quote = semantic_matcher.match_skill(cv_text, clean_skill)
             if is_matched:
                 if not quote:
                     quote = f"Kỹ năng ưu tiên '{matched_part}' được ghi nhận trong CV."
                 skills_evidence.append({
-                    "criterion": f"Kỹ năng ưu tiên: {skill}",
+                    "criterion": f"Kỹ năng ưu tiên: {clean_skill}",
                     "matched": True,
                     "score": 85.0,
                     "raw_quote": quote,
@@ -241,11 +251,11 @@ class AIEvaluatorService:
                 })
             else:
                 skills_evidence.append({
-                    "criterion": f"Kỹ năng ưu tiên: {skill}",
+                    "criterion": f"Kỹ năng ưu tiên: {clean_skill}",
                     "matched": False,
                     "score": 0.0,
                     "raw_quote": "",
-                    "explanation": f"Không đề cập kỹ năng ưu tiên '{skill}'."
+                    "explanation": f"Không đề cập kỹ năng ưu tiên '{clean_skill}'."
                 })
 
         skills_score = round((matched_count / max(len(req_skills), 1)) * 100.0, 1)

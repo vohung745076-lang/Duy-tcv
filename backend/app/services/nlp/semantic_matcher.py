@@ -68,13 +68,26 @@ class SemanticMatcher:
     ]
 
     @classmethod
+    def clean_skill_name(cls, raw_skill: str) -> str:
+        """
+        Làm sạch tên kỹ năng: loại bỏ tiền tố số thứ tự (ví dụ: '1. SQL' -> 'SQL',
+        '2) Excel' -> 'Excel', '- Python' -> 'Python', '• Pandas' -> 'Pandas').
+        """
+        if not raw_skill:
+            return ""
+        # Loại bỏ các mẫu tiền tố: số thứ tự (1., 2), (3), 4:) hoặc gạch đầu dòng (-, *, •, +)
+        cleaned = re.sub(r'^\s*(?:\(?\d+[\.\)\-:]+|\d+\s*[-:]+|[\-\*•\+]+)\s*', '', raw_skill)
+        return cleaned.strip(' ;.,')
+
+    @classmethod
     def find_best_quote(cls, text: str, keyword: str) -> str:
         """Tìm câu hoặc đoạn trích dẫn súc tích, sạch sẽ nhất chứa từ khóa (tối ưu 40-160 ký tự)."""
         if not text or not keyword:
             return ""
 
-        kw_clean = keyword.strip().lower()
-        if kw_clean not in text.lower():
+        clean_kw = cls.clean_skill_name(keyword) or keyword.strip()
+        kw_clean = clean_kw.strip().lower()
+        if not kw_clean or kw_clean not in text.lower():
             return ""
 
         # 1. Tách theo các ranh giới tự nhiên: xuống dòng, bullet, hoặc các cụm danh mục thường gặp
@@ -132,17 +145,26 @@ class SemanticMatcher:
         """
         So khớp một kỹ năng với văn bản CV:
         Hỗ trợ kỹ năng đơn ("SQL", "Python") hoặc kỹ năng ghép ("Power BI/Tableau", "Docker, Redis").
+        Tự động làm sạch tiền tố số thứ tự như "1. SQL" -> tìm kiếm "SQL".
         Trả về: (is_matched: bool, matched_part: str, raw_quote: str)
         """
         if not cv_text or not skill_name:
             return False, "", ""
 
         cv_lower = cv_text.lower()
+        cleaned_skill = cls.clean_skill_name(skill_name)
+        target_name = cleaned_skill if cleaned_skill else skill_name.strip()
 
-        # Tách các thành phần của kỹ năng ghép
-        parts = [p.strip() for p in re.split(r'[/,|+]', skill_name) if len(p.strip()) > 1]
+        # Tách các thành phần của kỹ năng ghép (ví dụ "Power BI / Tableau" hoặc "Docker, Kubernetes")
+        raw_parts = [p.strip() for p in re.split(r'[/,|+]', target_name) if len(p.strip()) > 0]
+        parts = []
+        for p in raw_parts:
+            cp = cls.clean_skill_name(p)
+            if cp and len(cp) >= 1:
+                parts.append(cp)
+
         if not parts:
-            parts = [skill_name.strip()]
+            parts = [target_name]
 
         for part in parts:
             part_lower = part.lower()

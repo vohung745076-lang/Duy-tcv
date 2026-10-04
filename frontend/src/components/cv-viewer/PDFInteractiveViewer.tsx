@@ -179,8 +179,12 @@ export const PDFInteractiveViewer: React.FC<PDFInteractiveViewerProps> = ({
       if (ev.matched) {
         const cleanedSkillName = ev.criterion
           .replace(/^(?:kỹ\s*năng\s*(?:bắt\s*buộc|ưu\s*tiên)\s*[:：\-]?\s*)/i, '')
+          .replace(/^\s*(?:\(?\d+[\.\)\-:]+|\d+\s*[-:]+|[\-\*•\+]+)\s*/, '')
           .trim();
-        const kwParts = cleanedSkillName.split(/[/,+|]/).map((k) => k.trim()).filter((k) => k.length > 1);
+        const kwParts = cleanedSkillName
+          .split(/[/,+|]/)
+          .map((k) => k.replace(/^\s*(?:\(?\d+[\.\)\-:]+|\d+\s*[-:]+|[\-\*•\+]+)\s*/, '').trim())
+          .filter((k) => k.length > 1);
         targets.push({
           type: 'skill',
           title: cleanedSkillName,

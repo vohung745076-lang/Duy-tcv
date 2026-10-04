@@ -27,16 +27,24 @@ export const CreateJobModal: React.FC<CreateJobModalProps> = ({ isOpen, onClose,
 
   if (!isOpen) return null;
 
+  const cleanSkillInput = (val: string) => {
+    return val
+      .replace(/^\s*(?:\(?\d+[\.\)\-:]+|\d+\s*[-:]+|[\-\*•\+]+)\s*/, '')
+      .trim();
+  };
+
   const handleAddReqSkill = () => {
-    if (newReqSkill.trim() && !reqSkills.includes(newReqSkill.trim())) {
-      setReqSkills([...reqSkills, newReqSkill.trim()]);
+    const cleaned = cleanSkillInput(newReqSkill);
+    if (cleaned && !reqSkills.includes(cleaned)) {
+      setReqSkills([...reqSkills, cleaned]);
       setNewReqSkill('');
     }
   };
 
   const handleAddPrefSkill = () => {
-    if (newPrefSkill.trim() && !prefSkills.includes(newPrefSkill.trim())) {
-      setPrefSkills([...prefSkills, newPrefSkill.trim()]);
+    const cleaned = cleanSkillInput(newPrefSkill);
+    if (cleaned && !prefSkills.includes(cleaned)) {
+      setPrefSkills([...prefSkills, cleaned]);
       setNewPrefSkill('');
     }
   };
