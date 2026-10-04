@@ -12,6 +12,7 @@ import { AuthErrorBanner } from './components/auth/AuthErrorBanner';
 import { PendingApprovalGate } from './components/auth/PendingApprovalGate';
 import { JobExportModal } from './components/jobs/JobExportModal';
 import { MonthlyCandidatesView } from './components/candidates/MonthlyCandidatesView';
+import { CandidatesManagementView } from './components/candidates/CandidatesManagementView';
 import { jobApi, candidateApi, evaluationApi } from './services/api';
 import type { Job, Candidate } from './types';
 import { supabase, authService, type UserProfile } from './services/supabase';
@@ -406,10 +407,28 @@ export function App() {
           ) : (
             <>
               {/* Tab 1: Dashboard (Bảng Điều Khiển Tuyển Dụng AI) */}
-              {(activeTab === 'dashboard' || activeTab === 'candidates') && activeJob && (
+              {activeTab === 'dashboard' && activeJob && (
                 <DashboardView
                   activeJob={activeJob}
                   onSelectCandidateToWorkspace={handleSelectCandidateById}
+                />
+              )}
+
+              {/* Tab: Quản lý Hồ sơ Ứng viên (Dark Enterprise SaaS) */}
+              {activeTab === 'candidates' && (
+                <CandidatesManagementView
+                  jobs={jobs}
+                  activeJob={activeJob}
+                  onSelectJob={(job) => setActiveJob(job)}
+                  candidates={candidates}
+                  onSelectCandidateToWorkspace={handleSelectCandidateToWorkspace}
+                  onOpenUploadModal={() => setUploadOpen(true)}
+                  onRunAiEvaluation={handleRunAiEvaluation}
+                  evaluatingCandidateId={evaluatingCandidateId}
+                  currentUser={currentUser}
+                  onRefreshCandidates={() => {
+                    if (activeJob) fetchCandidates(activeJob.id);
+                  }}
                 />
               )}
 
